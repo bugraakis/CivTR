@@ -133,15 +133,16 @@ def build_pool_embed(
     color: discord.Color,
     guild: discord.Guild | None = None,
 ) -> discord.Embed:
-    embed = discord.Embed(
-        title=f"🎴 {member.display_name}",
-        description=f"{len(pool)} lider",
-        color=color,
-    )
+    lines = []
     for civ, leader in pool:
         emoji = leader_emoji_str(leader, guild)
         label = f"{emoji} {leader}".strip() if emoji else leader
-        embed.add_field(name=label, value=civ, inline=True)
+        lines.append(f"{label} — {civ}")
+    embed = discord.Embed(
+        title=f"🎴 {member.display_name}  ({len(pool)} lider)",
+        description="\n".join(lines) or "—",
+        color=color,
+    )
     if pool:
         embed.set_thumbnail(url=image_url(*pool[0]))
     return embed
@@ -1048,15 +1049,16 @@ class AutoDraftFfaSession:
         guild = interaction.guild
         embeds = []
         for i, pool in enumerate(pools):
-            embed = discord.Embed(
-                title=f"🎴 Oyuncu {i + 1}",
-                description=f"{len(pool)} lider",
-                color=PLAYER_COLORS[i % len(PLAYER_COLORS)],
-            )
+            lines = []
             for civ, leader in pool:
                 emoji = leader_emoji_str(leader, guild)
                 label = f"{emoji} {leader}".strip() if emoji else leader
-                embed.add_field(name=label, value=civ, inline=True)
+                lines.append(f"{label} — {civ}")
+            embed = discord.Embed(
+                title=f"🎴 Oyuncu {i + 1}  ({len(pool)} lider)",
+                description="\n".join(lines) or "—",
+                color=PLAYER_COLORS[i % len(PLAYER_COLORS)],
+            )
             embeds.append(embed)
 
         first, rest = embeds[:10], embeds[10:]
@@ -1173,20 +1175,19 @@ class AutoDraftSession:
         for i, pair in enumerate(remaining[n * per_team :]):
             teams[i].append(pair)
 
-        embeds = [
-            discord.Embed(
-                title=f"{TEAM_EMOJIS[i % len(TEAM_EMOJIS)]} Takım {i + 1}",
-                description=f"{len(leaders)} lider",
-                color=TEAM_COLORS[i % len(TEAM_COLORS)],
-            )
-            for i, leaders in enumerate(teams)
-        ]
         guild = interaction.guild
+        embeds = []
         for i, leaders in enumerate(teams):
+            lines = []
             for civ, leader in leaders:
                 emoji = leader_emoji_str(leader, guild)
                 label = f"{emoji} {leader}".strip() if emoji else leader
-                embeds[i].add_field(name=label, value=civ, inline=True)
+                lines.append(f"{label} — {civ}")
+            embeds.append(discord.Embed(
+                title=f"{TEAM_EMOJIS[i % len(TEAM_EMOJIS)]} Takım {i + 1}  ({len(leaders)} lider)",
+                description="\n".join(lines) or "—",
+                color=TEAM_COLORS[i % len(TEAM_COLORS)],
+            ))
 
         first, rest = embeds[:10], embeds[10:]
         await interaction.response.edit_message(content=None, embeds=first, view=None)
@@ -1356,7 +1357,7 @@ class FfaResultModal(discord.ui.Modal, title="FFA Maç Sonucu"):
             if pid and pid in elo_by_id:
                 r     = elo_by_id[pid]
                 sign  = "+" if r.delta >= 0 else ""
-                suffix = f"  `{r.old_rating} → {r.new_rating} ({sign}{r.delta})`"
+                suffix = f"  `{sign}{r.delta} ELO`"
             ranking_parts.append(f"**{i + 1}.** {line}{suffix}")
 
         embed = discord.Embed(
@@ -1465,7 +1466,7 @@ class FfaReportModal(discord.ui.Modal, title="FFA Maç Sonucu"):
             if pid and pid in elo_by_id:
                 r    = elo_by_id[pid]
                 sign = "+" if r.delta >= 0 else ""
-                suffix = f"  `{r.old_rating} → {r.new_rating} ({sign}{r.delta})`"
+                suffix = f"  `{sign}{r.delta} ELO`"
             ranking_parts.append(f"**{i + 1}.** {line}{suffix}")
 
         embed = discord.Embed(
