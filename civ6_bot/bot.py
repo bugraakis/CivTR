@@ -318,7 +318,7 @@ class LeaderSelectView(discord.ui.View):
         sel = discord.ui.Select(
             placeholder=f"Lider seç — Sayfa {self.page+1}/{len(pages)}",
             options=[
-                discord.SelectOption(label=l, value=f"{c}||{l}")
+                discord.SelectOption(label=l, value=f"{c}||{l}", description=c)
                 for c, l in page_leaders
             ],
         )
