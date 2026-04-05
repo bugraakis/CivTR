@@ -1611,7 +1611,6 @@ async def on_ready():
     print(f"✅ {bot.user} olarak giriş yapıldı.")
     print(f"✅ Slash komutları {len(bot.guilds)} sunucuya anında senkronize edildi.")
     await bot.change_presence(activity=discord.Game(name="Civilization VI | /ffa"))
-    await bot.change_presence(activity=discord.Game(name="Civilization VI | /ffa"))
 
 
 # ===========================================================================
