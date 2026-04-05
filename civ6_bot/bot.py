@@ -1781,6 +1781,18 @@ async def coinflip_command(interaction: discord.Interaction):
     await interaction.response.send_message(f"🪙 **{result}!**")
 
 
+@bot.tree.command(name="sync", description="Slash komutlarını yeniden senkronize et (sadece bot sahibi)")
+async def sync_cmd(interaction: discord.Interaction):
+    if interaction.user.id != (await bot.application_info()).owner.id:
+        await interaction.response.send_message("Bu komut sadece bot sahibine ait!", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+    await interaction.followup.send(f"✅ {len(bot.guilds)} sunucuya senkronize edildi.", ephemeral=True)
+
+
 @bot.tree.command(name="stop", description="Bu kanalda devam eden aktif draft oturumunu iptal eder")
 async def stop_cmd(interaction: discord.Interaction):
     channel_id = interaction.channel_id
