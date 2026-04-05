@@ -708,6 +708,19 @@ class TeamGame:
         embed.add_field(name="⏭️ Sıradaki", value=next_str, inline=False)
         return embed
 
+    async def _start_action_queue(self, channel: discord.TextChannel):
+        """Kuyruğu başlat — action_index artırmadan ilk eylemi işle."""
+        if self.summary_msg:
+            try:
+                await self.summary_msg.edit(embed=self.build_summary_embed())
+            except discord.HTTPException:
+                pass
+        action = self.current_action()
+        if action is None:
+            await self._finalize(channel)
+        else:
+            await self._prompt_action(channel, action)
+
     async def advance(self, channel: discord.TextChannel):
         if self.prompt_msg:
             try:
@@ -879,7 +892,7 @@ class PlayerDraftView(discord.ui.View):
                 )
                 self.game.action_queue = _build_team_action_queue(self.game.team_size)
                 self.game.action_index = 0
-                await self.game.advance(inter.channel)
+                await self.game._start_action_queue(inter.channel)
 
         select.callback = on_select
         select_view = discord.ui.View(timeout=60)
