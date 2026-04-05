@@ -1207,7 +1207,7 @@ class AutoDraftCountView(discord.ui.View):
 # Slash Commands
 # ===========================================================================
 
-@bot.tree.command(name="team", description="Ses kanalıyla 2 takımlı sıralı draft: harita ban → civ ban → civ seçim")
+@bot.tree.command(name="team", description="Ses kanalındaki oyuncularla 2 takımlı sıralı draft başlatır: harita ban, lider ban ve lider seçim")
 @app_commands.describe(opponent="Rakip takımın temsilcisini etiketle")
 async def team_command(interaction: discord.Interaction, opponent: discord.Member):
     if interaction.channel_id in active_team_games:
@@ -1250,7 +1250,7 @@ async def team_command(interaction: discord.Interaction, opponent: discord.Membe
     await interaction.response.send_message(embed=embed, view=TeamSelectionView(game))
 
 
-@bot.tree.command(name="ffa", description="Ses kanalıyla FFA: harita oyu → civ ban (emoji) → lider havuzu dağıtımı")
+@bot.tree.command(name="ffa", description="Ses kanalındaki oyuncularla FFA draft başlatır: harita oylaması, lider ban ve havuz dağıtımı")
 async def ffa_command(interaction: discord.Interaction):
     if interaction.channel_id in active_ffa_games:
         await interaction.response.send_message(
@@ -1589,14 +1589,14 @@ class IdTypeView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="id", description="Maç sonucu gir ve ELO kaydet, veya kendi istatistiklerine bak")
+@bot.tree.command(name="id", description="Maç sonucunu girerek ELO puanı kazan veya kendi istatistiklerine göz at")
 async def id_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         "Ne yapmak istiyorsun?", view=IdTypeView(), ephemeral=True
     )
 
 
-@bot.tree.command(name="report", description="Maç ID'si ile sonuç raporla — FFA veya takım otomatik algılanır")
+@bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, ELO otomatik güncellenir")
 @app_commands.describe(match_id="Maç ID'si (örnek: FFA-A3K7X2 veya TEAM-B5K8X1)")
 async def report_command(interaction: discord.Interaction, match_id: str):
     mid = match_id.upper().strip()
@@ -1611,12 +1611,12 @@ async def report_command(interaction: discord.Interaction, match_id: str):
         )
 
 
-@bot.tree.command(name="autodraftffa", description="Oyuncu sayısı seç, lider ban et → havuzlar otomatik dağıtılır (ses kanalı gerekmez)")
+@bot.tree.command(name="autodraftffa", description="Ses kanalı olmadan FFA draft: oyuncu sayısını seç, lider banla, havuzlar otomatik dağıtılır")
 async def autodraftffa_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç oyuncu?", view=AutoDraftFfaCountView())
 
 
-@bot.tree.command(name="autodraftteam", description="Takım sayısı seç, lider ban et → her takıma otomatik dağıtılır (ses kanalı gerekmez)")
+@bot.tree.command(name="autodraftteam", description="Ses kanalı olmadan takım drafti: takım sayısını seç, lider banla, liderler takımlara otomatik dağıtılır")
 async def autodraftteam_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç takım olsun?", view=AutoDraftCountView())
 
@@ -1719,7 +1719,7 @@ class LeaderboardView(discord.ui.View):
         return cb
 
 
-@bot.tree.command(name="leaderboard", description="FFA ve teamer ELO sıralaması — butonlarla mod ve sayfa değiştirilebilir")
+@bot.tree.command(name="leaderboard", description="Sunucudaki oyuncuların ELO sıralamasını gösterir, FFA veya Teamer modunu seçebilirsin")
 async def leaderboard_command(interaction: discord.Interaction):
     view  = LeaderboardView("ffa")
     await interaction.response.send_message(embed=view.build_embed(), view=view)
@@ -1764,12 +1764,12 @@ class MostPlayedTypeView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=None)
 
 
-@bot.tree.command(name="mostplayed", description="En çok oynanan medeniyetleri FFA veya teamer modunda sıralı göster")
+@bot.tree.command(name="mostplayed", description="Sunucuda en çok oynanan liderleri listeler, FFA veya Teamer modunu seçebilirsin")
 async def mostplayed_command(interaction: discord.Interaction):
     await interaction.response.send_message("Hangi mod?", view=MostPlayedTypeView())
 
 
-@bot.tree.command(name="stop", description="Bu kanaldaki aktif oyunu iptal et")
+@bot.tree.command(name="stop", description="Bu kanalda devam eden aktif draft oturumunu iptal eder")
 async def stop_cmd(interaction: discord.Interaction):
     channel_id = interaction.channel_id
     stopped = False
@@ -1785,7 +1785,7 @@ async def stop_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
-@bot.tree.command(name="help", description="Tüm bot komutlarını ve açıklamalarını listele")
+@bot.tree.command(name="help", description="Tüm komutları ve ne işe yaradıklarını açıklamalı şekilde listeler")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📖 Simfest Bot — Komutlar",
