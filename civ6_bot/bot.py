@@ -19,6 +19,7 @@ import database as db
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = os.getenv("GUILD_ID")
 
 # ---------------------------------------------------------------------------
 # All leaders flat list
@@ -1605,9 +1606,15 @@ async def help_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     db.init_db()
-    await bot.tree.sync()
+    if GUILD_ID:
+        guild = discord.Object(id=int(GUILD_ID))
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+        print(f"✅ Slash komutları guild {GUILD_ID} ile senkronize edildi.")
+    else:
+        await bot.tree.sync()
+        print("✅ Slash komutları global olarak senkronize edildi.")
     print(f"✅ {bot.user} olarak giriş yapıldı.")
-    print("✅ Slash komutları senkronize edildi.")
     await bot.change_presence(activity=discord.Game(name="Civilization VI | /ffa"))
 
 
