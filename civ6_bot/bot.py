@@ -1866,11 +1866,16 @@ async def help_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     db.init_db()
+    synced_count = 0
     for guild in bot.guilds:
-        bot.tree.copy_global_to(guild=guild)
-        await bot.tree.sync(guild=guild)
-    print(f"✅ {bot.user} olarak giriş yapıldı.")
-    print(f"✅ Slash komutları {len(bot.guilds)} sunucuya senkronize edildi.")
+        try:
+            bot.tree.copy_global_to(guild=guild)
+            cmds = await bot.tree.sync(guild=guild)
+            print(f"✅ {guild.name} — {len(cmds)} komut sync edildi: {[c.name for c in cmds]}")
+            synced_count += 1
+        except Exception as e:
+            print(f"❌ {guild.name} sync hatası: {e}")
+    print(f"✅ {bot.user} olarak giriş yapıldı. ({synced_count}/{len(bot.guilds)} sunucu)")
     await bot.change_presence(activity=discord.Game(name="Simfest"))
 
 
