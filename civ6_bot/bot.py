@@ -138,7 +138,7 @@ def build_pool_embed(
     for civ, leader in pool:
         emoji = leader_emoji_str(leader, guild)
         label = f"{emoji} {leader}".strip() if emoji else leader
-        embed.add_field(name=label, value="\u200b", inline=True)
+        embed.add_field(name=label, value=civ, inline=True)
     if pool:
         embed.set_thumbnail(url=image_url(*pool[0]))
     return embed
@@ -315,7 +315,7 @@ class LeaderSelectView(discord.ui.View):
         sel = discord.ui.Select(
             placeholder=f"Lider seç — Sayfa {self.page+1}/{len(pages)}",
             options=[
-                discord.SelectOption(label=l, value=f"{c}||{l}", description=c)
+                discord.SelectOption(label=l, value=f"{c}||{l}")
                 for c, l in page_leaders
             ],
         )
@@ -1050,6 +1050,58 @@ class AutoDraftFfaSession:
             await interaction.followup.send(embeds=chunk)
 
 
+class AutoBanView(discord.ui.View):
+    """Ban phase for autodraft sessions: paginated leader list, no civ-first flow."""
+
+    def __init__(self, session):
+        super().__init__(timeout=None)
+        self.session = session
+        self.message: discord.Message | None = None
+
+    def build_embed(self) -> discord.Embed:
+        banned_text = (
+            "\n".join(f"~~{l}~~" for c, l in sorted(self.session.banned))
+            if self.session.banned else "Henüz ban yok"
+        )
+        embed = discord.Embed(
+            title="🚫 Ban Aşaması",
+            description=(
+                f"Toplam: **{len(ALL_LEADERS)}**  |  "
+                f"Banlanan: **{len(self.session.banned)}**  |  "
+                f"Kalan: **{len(ALL_LEADERS) - len(self.session.banned)}**"
+            ),
+            color=discord.Color.orange(),
+        )
+        embed.add_field(name="Banlananlar", value=banned_text or "—", inline=False)
+        return embed
+
+    @discord.ui.button(label="🚫 Ban Ekle", style=discord.ButtonStyle.danger)
+    async def ban_btn(self, interaction: discord.Interaction, _btn):
+        session = self.session
+        view_ref = self
+        available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in session.banned]
+
+        async def on_pick(inter: discord.Interaction, civ: str, leader: str):
+            if (civ, leader) in session.banned:
+                await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
+                return
+            session.banned.add((civ, leader))
+            await inter.response.edit_message(content=f"✅ **{leader}** banlandı!", view=None)
+            if view_ref.message:
+                await view_ref.message.edit(embed=view_ref.build_embed())
+
+        await interaction.response.send_message(
+            "Banlamak istediğin lideri seç:",
+            view=LeaderSelectView(available, on_pick),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="✅ Draftı Başlat", style=discord.ButtonStyle.success)
+    async def start_btn(self, interaction: discord.Interaction, _btn):
+        self.stop()
+        await self.session.finalize(interaction)
+
+
 class AutoDraftFfaCountView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=60)
@@ -1067,9 +1119,9 @@ class AutoDraftFfaCountView(discord.ui.View):
         self.stop()
         n = int(interaction.data["values"][0])
         session = AutoDraftFfaSession(n)
-        await interaction.response.edit_message(
-            content=session.ban_status(), view=TeamBanPhaseView(session)
-        )
+        ban_view = AutoBanView(session)
+        await interaction.response.edit_message(embed=ban_view.build_embed(), view=ban_view)
+        ban_view.message = await interaction.original_response()
 
 
 # ===========================================================================
@@ -1142,9 +1194,9 @@ class AutoDraftCountView(discord.ui.View):
         async def cb(interaction: discord.Interaction):
             self.stop()
             session = AutoDraftSession(n)
-            await interaction.response.edit_message(
-                content=session.ban_status(), view=TeamBanPhaseView(session)
-            )
+            ban_view = AutoBanView(session)
+            await interaction.response.edit_message(embed=ban_view.build_embed(), view=ban_view)
+            ban_view.message = await interaction.original_response()
         return cb
 
 
