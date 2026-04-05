@@ -138,7 +138,7 @@ def build_pool_embed(
     for civ, leader in pool:
         emoji = leader_emoji_str(leader, guild)
         label = f"{emoji} {leader}".strip() if emoji else leader
-        embed.add_field(name=label, value=civ, inline=True)
+        embed.add_field(name=label, value="\u200b", inline=True)
     if pool:
         embed.set_thumbnail(url=image_url(*pool[0]))
     return embed
