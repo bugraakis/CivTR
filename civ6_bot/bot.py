@@ -1605,9 +1605,11 @@ async def help_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     db.init_db()
-    await bot.tree.sync()
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
     print(f"✅ {bot.user} olarak giriş yapıldı.")
-    print("✅ Slash komutları senkronize edildi.")
+    print(f"✅ Slash komutları {len(bot.guilds)} sunucuya anında senkronize edildi.")
     await bot.change_presence(activity=discord.Game(name="Civilization VI | /ffa"))
 
 
