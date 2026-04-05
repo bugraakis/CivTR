@@ -184,7 +184,7 @@ class FFAGame:
         self.players = players
         self.map_votes: dict[int, str] = {}   # player_id -> map_name
         self.selected_map: str | None = None
-        self.bans: dict[int, str] = {}        # player_id -> civ_name
+        self.bans: dict[int, tuple[str, str]] = {}  # player_id -> (civ, leader)
 
     # ---- map phase ----
 
@@ -202,19 +202,19 @@ class FFAGame:
 
     # ---- ban phase ----
 
-    def record_ban(self, player_id: int, civ: str):
-        self.bans[player_id] = civ
+    def record_ban(self, player_id: int, pair: tuple[str, str]):
+        self.bans[player_id] = pair
 
     def all_bans_done(self) -> bool:
         return len(self.bans) == len(self.players)
 
-    def get_banned_civs(self) -> set[str]:
+    def get_banned_pairs(self) -> set[tuple[str, str]]:
         return set(self.bans.values())
 
     # ---- pool distribution ----
 
     def distribute_pools(self) -> dict[discord.Member, list[tuple[str, str]]]:
-        return _distribute_leaders(self.players, banned_civs=self.get_banned_civs())
+        return _distribute_leaders(self.players, banned_pairs=self.get_banned_pairs())
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +287,7 @@ class MapSelectionView(discord.ui.View):
 # ---------------------------------------------------------------------------
 
 class BanPhaseView(discord.ui.View):
-    """Single message shared by all players. Each clicks Ban button to pick a civ from dropdown."""
+    """Single message shared by all players. Each clicks Ban to pick a leader."""
 
     def __init__(self, game: FFAGame):
         super().__init__(timeout=None)
@@ -298,14 +298,14 @@ class BanPhaseView(discord.ui.View):
         status_lines = []
         for player in self.game.players:
             if player.id in self.game.bans:
-                civ = self.game.bans[player.id]
-                status_lines.append(f"✅ {player.mention} → {civ_emoji_str(civ)} **{civ}**")
+                civ, leader = self.game.bans[player.id]
+                status_lines.append(f"✅ {player.mention} → **{leader}** ({civ})")
             else:
                 status_lines.append(f"⏳ {player.mention}")
 
         embed = discord.Embed(
-            title="🚫 Medeniyet Ban Aşaması",
-            description="Aşağıdaki **🚫 Ban Yap** butonuna bas ve banlamak istediğin medeniyeti seç.",
+            title="🚫 Lider Ban Aşaması",
+            description="Aşağıdaki **🚫 Ban Yap** butonuna bas ve banlamak istediğin lideri seç.",
             color=discord.Color.orange(),
         )
         embed.add_field(name="Durum", value="\n".join(status_lines), inline=False)
@@ -321,29 +321,33 @@ class BanPhaseView(discord.ui.View):
             await interaction.response.send_message("Zaten ban yaptın!", ephemeral=True)
             return
 
-        used_civs = set(self.game.bans.values())
-        available = [c for c in CIVS if c not in used_civs]
+        used_pairs = self.game.get_banned_pairs()
+        available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in used_pairs]
         pages = [available[i:i+25] for i in range(0, len(available), 25)]
 
         select_view = discord.ui.View(timeout=60)
         for page in pages[:4]:
             select = discord.ui.Select(
-                placeholder="Medeniyet seç...",
+                placeholder="Lider seç...",
                 options=[
-                    discord.SelectOption(label=c, value=c, emoji=civ_emoji_str(c) or None)
-                    for c in page
+                    discord.SelectOption(label=l, value=f"{c}|{l}", description=c)
+                    for c, l in page
                 ],
             )
 
             async def on_select(inter: discord.Interaction, s=select):
-                chosen = s.values[0]
-                self.game.record_ban(player.id, chosen)
+                val = s.values[0]
+                civ, leader = val.split("|", 1)
+                if (civ, leader) in self.game.get_banned_pairs():
+                    await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
+                    return
+                self.game.record_ban(player.id, (civ, leader))
                 embed = self.build_embed()
-                await inter.response.edit_message(content=f"✅ **{chosen}** banlandı!", view=None)
+                await inter.response.edit_message(content=f"✅ **{leader}** banlandı!", view=None)
                 if self.message:
                     if self.game.all_bans_done():
                         await self.message.edit(embed=embed, view=self)
-                        await _finalize_ffa_pools(interaction.channel, self.game, ban_message=self.message)
+                        await _finalize_ffa_pools(inter.channel, self.game, ban_message=self.message)
                     else:
                         await self.message.edit(embed=embed, view=self)
 
@@ -351,7 +355,7 @@ class BanPhaseView(discord.ui.View):
             select_view.add_item(select)
 
         await interaction.response.send_message(
-            "Banlamak istediğin medeniyeti seç:", view=select_view, ephemeral=True
+            "Banlamak istediğin lideri seç:", view=select_view, ephemeral=True
         )
 
 
@@ -370,18 +374,18 @@ async def _finalize_ffa_pools(
     game: FFAGame,
     ban_message: discord.Message | None = None,
 ):
-    banned = game.get_banned_civs()
     pools = game.distribute_pools()
     mentions = " ".join(m.mention for m in game.players)
 
+    banned_pairs = game.get_banned_pairs()
     ban_summary = "  ·  ".join(
-        f"{civ_emoji_str(c)} **{c}**" for c in sorted(banned)
+        f"**{l}** ({c})" for c, l in sorted(banned_pairs)
     ) or "Yok"
 
     match_id = _make_match_id("FFA")
     header = discord.Embed(
         title=f"🗺️ {game.selected_map}  ·  ⚔️ FFA Draft Tamamlandı!",
-        description=f"**Banlanan Medeniyetler:** {ban_summary}",
+        description=f"**Banlanan Liderler:** {ban_summary}",
         color=discord.Color.gold(),
     )
     header.set_footer(text=f"Maç ID: {match_id}")
@@ -568,8 +572,8 @@ class TeamGame:
         self.selected_map: str | None = None
         self.map_bans: list[tuple[int, str]] = []   # (takım, harita)
 
-        self.banned_civs: list[tuple[int, str]] = []  # (takım, civ)
-        self.picked_civs: list[tuple[int, str]] = []  # (takım, civ)
+        self.banned_leaders: list[tuple[int, str]] = []  # (takım, lider)
+        self.picked_leaders: list[tuple[int, str]] = []  # (takım, lider)
 
         self.action_queue: list[tuple[str, int]] = []
         self.action_index: int = 0
@@ -615,15 +619,15 @@ class TeamGame:
         else:
             map_str = "Başlamadı"
 
-        t1_bans  = [f"{civ_emoji_str(c)}{c}" for t, c in self.banned_civs if t == 1]
-        t2_bans  = [f"{civ_emoji_str(c)}{c}" for t, c in self.banned_civs if t == 2]
-        t1_picks = [f"{civ_emoji_str(c)}{c}" for t, c in self.picked_civs  if t == 1]
-        t2_picks = [f"{civ_emoji_str(c)}{c}" for t, c in self.picked_civs  if t == 2]
+        t1_bans  = [f"~~{l}~~" for t, l in self.banned_leaders if t == 1]
+        t2_bans  = [f"~~{l}~~" for t, l in self.banned_leaders if t == 2]
+        t1_picks = [f"**{l}**" for t, l in self.picked_leaders  if t == 1]
+        t2_picks = [f"**{l}**" for t, l in self.picked_leaders  if t == 2]
 
         action = self.current_action()
         if action:
             at, team = action
-            labels = {"map_ban": "🗺️ Harita Banlıyor", "civ_ban": "🚫 Civ Banlıyor", "civ_pick": "✅ Civ Seçiyor"}
+            labels = {"map_ban": "🗺️ Harita Banlıyor", "civ_ban": "🚫 Lider Banlıyor", "civ_pick": "✅ Lider Seçiyor"}
             next_str = f"**Takım {team}** — {self.get_rep(team).display_name}  {labels[at]}"
         else:
             next_str = "✅ Draft tamamlandı!"
@@ -681,10 +685,10 @@ class TeamGame:
             view = TeamMapBanView(self, team, rep)
         else:
             verb  = "banlamak" if at == "civ_ban" else "seçmek"
-            title = "Civ Banlıyor" if at == "civ_ban" else "Civ Seçiyor"
+            title = "Lider Banlıyor" if at == "civ_ban" else "Lider Seçiyor"
             embed = discord.Embed(
                 title=f"Takım {team} — {title}",
-                description=f"{rep.mention} {verb} istediğin medeniyetin emojisini bu mesaja ekle, ardından butona bas.",
+                description=f"{rep.mention} {verb} istediğin lideri seç.",
                 color=color,
             )
             view = TeamCivActionView(self, at, team, rep)
@@ -692,8 +696,8 @@ class TeamGame:
         self.prompt_msg = await channel.send(embed=embed, view=view)
 
     async def _finalize(self, channel: discord.TextChannel):
-        t1_picks = [c for t, c in self.picked_civs if t == 1]
-        t2_picks = [c for t, c in self.picked_civs if t == 2]
+        t1_picks = [l for t, l in self.picked_leaders if t == 1]
+        t2_picks = [l for t, l in self.picked_leaders if t == 2]
 
         match_id = _make_match_id("TEAM")
         embed = discord.Embed(
@@ -703,12 +707,12 @@ class TeamGame:
         embed.set_footer(text=f"Maç ID: {match_id}")
         embed.add_field(
             name="🔴 Takım 1",
-            value="\n".join(f"{civ_emoji_str(c)} {c}" for c in t1_picks) or "—",
+            value="\n".join(f"**{l}**" for l in t1_picks) or "—",
             inline=True,
         )
         embed.add_field(
             name="🔵 Takım 2",
-            value="\n".join(f"{civ_emoji_str(c)} {c}" for c in t2_picks) or "—",
+            value="\n".join(f"**{l}**" for l in t2_picks) or "—",
             inline=True,
         )
         mentions = " ".join(m.mention for m in self.all_players)
@@ -797,37 +801,48 @@ class TeamCivActionView(discord.ui.View):
             )
             return
 
-        message = await interaction.channel.fetch_message(interaction.message.id)
-        civ: str | None = None
-        for reaction in message.reactions:
-            async for user in reaction.users():
-                if user.id == self.rep.id:
-                    civ = emoji_to_civ(str(reaction.emoji))
-                    break
-            if civ:
-                break
+        used_leaders = {l for _, l in self.game.banned_leaders} | {l for _, l in self.game.picked_leaders}
+        available = [(c, l) for c, l in ALL_LEADERS if l not in used_leaders]
+        pages = [available[i:i+25] for i in range(0, len(available), 25)]
 
-        if not civ:
-            await interaction.response.send_message(
-                "Önce medeniyetin emojisini bu mesaja ekle, sonra butona bas.", ephemeral=True
+        select_view = discord.ui.View(timeout=60)
+        for page in pages[:4]:
+            select = discord.ui.Select(
+                placeholder="Lider seç...",
+                options=[
+                    discord.SelectOption(label=l, value=f"{c}|{l}", description=c)
+                    for c, l in page
+                ],
             )
-            return
 
-        used = {c for _, c in self.game.banned_civs} | {c for _, c in self.game.picked_civs}
-        if civ in used:
-            status = "banlandı" if civ in {c for _, c in self.game.banned_civs} else "seçildi"
-            await interaction.response.send_message(f"**{civ}** zaten {status}!", ephemeral=True)
-            return
+            async def on_select(inter: discord.Interaction, s=select):
+                val = s.values[0]
+                civ, leader = val.split("|", 1)
+                used_now = {l for _, l in self.game.banned_leaders} | {l for _, l in self.game.picked_leaders}
+                if leader in used_now:
+                    status = "banlandı" if leader in {l for _, l in self.game.banned_leaders} else "seçildi"
+                    await inter.response.edit_message(content=f"**{leader}** zaten {status}!", view=None)
+                    return
 
-        if self.action_type == "civ_ban":
-            self.game.banned_civs.append((self.team, civ))
-        else:
-            self.game.picked_civs.append((self.team, civ))
+                if self.action_type == "civ_ban":
+                    self.game.banned_leaders.append((self.team, leader))
+                else:
+                    self.game.picked_leaders.append((self.team, leader))
 
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.edit_message(view=self)
-        await self.game.advance(interaction.channel)
+                action_word = "banlandı" if self.action_type == "civ_ban" else "seçildi"
+                await inter.response.edit_message(content=f"✅ **{leader}** {action_word}!", view=None)
+
+                for item in self.children:
+                    item.disabled = True
+                await self.game.advance(inter.channel)
+
+            select.callback = on_select
+            select_view.add_item(select)
+
+        action_word = "Banlamak" if self.action_type == "civ_ban" else "Seçmek"
+        await interaction.response.send_message(
+            f"{action_word} istediğin lideri seç:", view=select_view, ephemeral=True
+        )
 
 
 # ===========================================================================
