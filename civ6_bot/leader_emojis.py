@@ -37,7 +37,7 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     "Cleopatra (Ptolemaic)":              "PtolemicCleopatra",
     "Ramses II":                          "Ramses",
     # England
-    "Eleanor of Aquitaine (England)":     "ElanorEngland",
+    "Eleanor of Aquitaine (England)":     "EleanorEngland",
     "Elizabeth I":                        "ElizabethI",
     "Victoria (Age of Empire)":           "Victoria",
     "Victoria (Age of Steam)":            "Victoria",
@@ -46,7 +46,7 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     # France
     "Catherine de Medici (Black Queen)":  "CatherineBlackQueen",
     "Catherine de Medici (Magnificence)": "CatherineMagnificient",
-    "Eleanor of Aquitaine (France)":      "ElanorFrance",
+    "Eleanor of Aquitaine (France)":      "EleanorFrance",
     # Gaul
     "Ambiorix":                           "Ambiorix",
     "Vercingetorix":                      "Vercingetorix",
