@@ -116,9 +116,11 @@ def civ_emoji_str(civ: str) -> str:
 def leader_emoji_str(leader: str, guild: discord.Guild | None = None) -> str:
     """Return the Discord emoji string for a leader, resolved live from the guild."""
     name = LEADER_EMOJI_NAMES.get(leader)
-    if not name or not guild:
+    if not name:
         return ""
-    emoji = discord.utils.get(guild.emojis, name=name)
+    # Önce guild'e bak, sonra botun eriştiği tüm sunuculara
+    emoji = (discord.utils.get(guild.emojis, name=name) if guild else None) \
+            or discord.utils.get(bot.emojis, name=name)
     return str(emoji) if emoji else ""
 
 
@@ -1605,6 +1607,10 @@ async def help_command(interaction: discord.Interaction):
 @bot.event
 async def on_ready():
     db.init_db()
+    # Global komutları temizle (çift görünmeyi önlemek için)
+    bot.tree.clear_commands(guild=None)
+    await bot.tree.sync()
+    # Her sunucuya guild sync yap (anında aktif olur)
     for guild in bot.guilds:
         bot.tree.copy_global_to(guild=guild)
         await bot.tree.sync(guild=guild)
