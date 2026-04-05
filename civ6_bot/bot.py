@@ -1539,7 +1539,7 @@ class TeamerReportModal(discord.ui.Modal, title="Teamer Maç Sonucu"):
         await interaction.response.send_message(embed=embed)
 
 
-class IdTypeView(discord.ui.View):
+class ResultEntryView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=60)
 
@@ -1551,61 +1551,54 @@ class IdTypeView(discord.ui.View):
     async def team_btn(self, interaction: discord.Interaction, _btn):
         await interaction.response.send_modal(TeamerResultModal())
 
-    @discord.ui.button(label="📊 İstatistiklerim", style=discord.ButtonStyle.secondary)
-    async def stats_btn(self, interaction: discord.Interaction, _btn):
-        uid = str(interaction.user.id)
-        name = interaction.user.display_name
-
-        ffa  = db.ffa_player(uid)
-        team = db.team_player(uid)
-
-        embed = discord.Embed(
-            title=f"📊 {name} — İstatistikler",
-            color=discord.Color.blurple(),
-        )
-
-        ffa_civs  = db.player_most_played(uid, "ffa",  limit=3)
-        team_civs = db.player_most_played(uid, "team", limit=3)
-
-        def civ_line(rows) -> str:
-            return ", ".join(f"{r['civ']} ({r['plays']}x)" for r in rows) or "—"
-
-        if ffa:
-            win_pct = round(100 * ffa["wins"] / ffa["games"], 1) if ffa["games"] else 0
-            embed.add_field(
-                name="⚔️ FFA",
-                value=(
-                    f"ELO: **{ffa['rating']}**\n"
-                    f"Maç: {ffa['games']}  ·  1. bitiş: {ffa['wins']}  ·  %{win_pct}\n"
-                    f"En çok: {civ_line(ffa_civs)}"
-                ),
-                inline=True,
-            )
-        else:
-            embed.add_field(name="⚔️ FFA", value=f"Kayıt yok (başlangıç: {db.FFA_START})", inline=True)
-
-        if team:
-            win_pct = round(100 * team["wins"] / team["games"], 1) if team["games"] else 0
-            embed.add_field(
-                name="🤝 Teamer",
-                value=(
-                    f"ELO: **{team['rating']}**\n"
-                    f"G/M: {team['wins']}/{team['losses']}  ·  %{win_pct} kazanma\n"
-                    f"En çok: {civ_line(team_civs)}"
-                ),
-                inline=True,
-            )
-        else:
-            embed.add_field(name="🤝 Teamer", value=f"Kayıt yok (başlangıç: {db.TEAM_START})", inline=True)
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 @bot.tree.command(name="id", description="Maç sonucunu girerek ELO puanı kazan veya kendi istatistiklerine göz at")
 async def id_command(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "Ne yapmak istiyorsun?", view=IdTypeView(), ephemeral=True
+    uid  = str(interaction.user.id)
+    name = interaction.user.display_name
+
+    ffa       = db.ffa_player(uid)
+    team      = db.team_player(uid)
+    ffa_civs  = db.player_most_played(uid, "ffa",  limit=5)
+    team_civs = db.player_most_played(uid, "team", limit=5)
+
+    def civ_lines(rows) -> str:
+        return "\n".join(f"`{r['civ']}` — {r['plays']}x" for r in rows) or "—"
+
+    embed = discord.Embed(
+        title=f"📊 {name} — İstatistikler",
+        color=discord.Color.blurple(),
     )
+
+    if ffa:
+        win_pct = round(100 * ffa["wins"] / ffa["games"], 1) if ffa["games"] else 0
+        embed.add_field(
+            name="⚔️ FFA",
+            value=(
+                f"ELO: **{ffa['rating']}**\n"
+                f"Maç: {ffa['games']}  ·  1. sıra: {ffa['wins']}  ·  %{win_pct}\n"
+                f"En çok oynadıkları:\n{civ_lines(ffa_civs)}"
+            ),
+            inline=True,
+        )
+    else:
+        embed.add_field(name="⚔️ FFA", value=f"Henüz kayıt yok.\nBaşlangıç ELO: **{db.FFA_START}**", inline=True)
+
+    if team:
+        win_pct = round(100 * team["wins"] / team["games"], 1) if team["games"] else 0
+        embed.add_field(
+            name="🤝 Teamer",
+            value=(
+                f"ELO: **{team['rating']}**\n"
+                f"Galibiyet/Mağlubiyet: {team['wins']}/{team['losses']}  ·  %{win_pct}\n"
+                f"En çok oynadıkları:\n{civ_lines(team_civs)}"
+            ),
+            inline=True,
+        )
+    else:
+        embed.add_field(name="🤝 Teamer", value=f"Henüz kayıt yok.\nBaşlangıç ELO: **{db.TEAM_START}**", inline=True)
+
+    await interaction.response.send_message(embed=embed, view=ResultEntryView(), ephemeral=True)
 
 
 @bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, ELO otomatik güncellenir")
