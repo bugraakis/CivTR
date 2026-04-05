@@ -1311,7 +1311,7 @@ def _parse_line(guild: discord.Guild, line: str) -> tuple[str | None, str, str |
     pid = _parse_mention_id(line)
     if pid:
         member = guild.get_member(int(pid))
-        name = member.display_name if member else f"<@{pid}>"
+        name = str(member) if member else f"<@{pid}>"
         remainder = re.sub(r"<@!?\d+>", "", line).strip() or None
         if remainder:
             civ = emoji_to_civ(remainder) or remainder
