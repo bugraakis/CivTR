@@ -23,11 +23,14 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # ---------------------------------------------------------------------------
 # All leaders flat list
 # ---------------------------------------------------------------------------
-ALL_LEADERS: list[tuple[str, str]] = [
-    (civ, leader)
-    for civ, leaders in LEADERS_BY_CIV.items()
-    for leader in leaders
-]
+ALL_LEADERS: list[tuple[str, str]] = sorted(
+    [
+        (civ, leader)
+        for civ, leaders in LEADERS_BY_CIV.items()
+        for leader in leaders
+    ],
+    key=lambda x: x[1],  # lider adına göre alfabetik
+)
 
 # Civ pages for select menus (max 25 options)
 _CIV_PAGES: list[list[str]] = [CIVS[i : i + 25] for i in range(0, len(CIVS), 25)]
