@@ -401,7 +401,7 @@ class BanPhaseView(discord.ui.View):
                 await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
                 return
             game_ref.record_ban(player.id, (civ, leader))
-            await inter.response.edit_message(content=f"✅ **{leader}** ({civ}) banlandı!", view=None)
+            await inter.response.edit_message(content="\u200b", view=None)
             embed = view_ref.build_embed()
             if view_ref.message:
                 if game_ref.all_bans_done():
@@ -1000,8 +1000,7 @@ class TeamCivActionView(discord.ui.View):
                 game_ref.banned_leaders.append((team, leader))
             else:
                 game_ref.picked_leaders.append((team, leader))
-            act_word = "banlandı" if action_type == "civ_ban" else "seçildi"
-            await inter.response.edit_message(content=f"✅ **{leader}** ({civ}) {act_word}!", view=None)
+            await inter.response.edit_message(content="\u200b", view=None)
             for item in view_ref.children:
                 item.disabled = True
             await game_ref.advance(inter.channel)
@@ -1102,7 +1101,7 @@ class AutoBanView(discord.ui.View):
                 await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
                 return
             session.banned.add((civ, leader))
-            await inter.response.edit_message(content=f"✅ **{leader}** banlandı!", view=None)
+            await inter.response.edit_message(content="\u200b", view=None)
             if view_ref.message:
                 await view_ref.message.edit(embed=view_ref.build_embed())
 
@@ -1782,6 +1781,12 @@ async def mostplayed_command(interaction: discord.Interaction):
     await interaction.response.send_message("Hangi mod?", view=MostPlayedTypeView())
 
 
+@bot.tree.command(name="coinflip", description="Yazı mı tura mı? Madeni parayı havaya at!")
+async def coinflip_command(interaction: discord.Interaction):
+    result = random.choice(["Yazı", "Tura"])
+    await interaction.response.send_message(f"🪙 **{result}!**")
+
+
 @bot.tree.command(name="stop", description="Bu kanalda devam eden aktif draft oturumunu iptal eder")
 async def stop_cmd(interaction: discord.Interaction):
     channel_id = interaction.channel_id
@@ -1838,6 +1843,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="🛑 /stop",
         value="Bu kanalda aktif olan draft oturumunu iptal eder.",
+        inline=False,
+    )
+    embed.add_field(
+        name="🪙 /coinflip",
+        value="Madeni parayı havaya at, yazı mı tura mı karar ver!",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
