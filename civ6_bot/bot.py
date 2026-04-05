@@ -1598,7 +1598,7 @@ async def id_command(interaction: discord.Interaction):
     else:
         embed.add_field(name="🤝 Teamer", value=f"Henüz kayıt yok.\nBaşlangıç ELO: **{db.TEAM_START}**", inline=True)
 
-    await interaction.response.send_message(embed=embed, view=ResultEntryView(), ephemeral=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, ELO otomatik güncellenir")
