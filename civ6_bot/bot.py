@@ -598,13 +598,9 @@ class TeamGame:
             self.team1_rep, self.team2_rep = self.rep2, self.rep1
         else:
             self.team1_rep, self.team2_rep = self.rep1, self.rep2
-
-        others = [p for p in self.all_players if p not in (self.rep1, self.rep2)]
-        random.shuffle(others)
-        half = len(others) // 2
-        self.team1 = [self.team1_rep] + others[:half]
-        self.team2 = [self.team2_rep] + others[half:]
-        self.action_queue = _build_team_action_queue(self.team_size)
+        self.team1 = [self.team1_rep]
+        self.team2 = [self.team2_rep]
+        # action_queue is set after player draft completes
 
     def build_summary_embed(self) -> discord.Embed:
         def names(members: list[discord.Member]) -> str:
@@ -720,6 +716,119 @@ class TeamGame:
         active_team_games.pop(channel.id, None)
 
 
+class PlayerDraftView(discord.ui.View):
+    """Reps take turns picking players for their teams (snake draft)."""
+
+    def __init__(self, game: TeamGame):
+        super().__init__(timeout=None)
+        self.game = game
+        self._add_button()
+
+    def _add_button(self):
+        self.clear_items()
+        rep, team = self._current_rep()
+        label = f"👤 Oyuncu Seç (Takım {team} — {rep.display_name})"
+        btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
+        btn.callback = self._pick
+        self.add_item(btn)
+
+    def _current_rep(self) -> tuple[discord.Member, int]:
+        t1_count = len(self.game.team1)
+        t2_count = len(self.game.team2)
+        if t1_count <= t2_count:
+            return self.game.team1_rep, 1
+        else:
+            return self.game.team2_rep, 2
+
+    def build_embed(self) -> discord.Embed:
+        rep, team = self._current_rep()
+        picked_ids = {p.id for p in self.game.team1 + self.game.team2}
+        remaining = [p for p in self.game.all_players if p.id not in picked_ids]
+        embed = discord.Embed(
+            title="👥 Oyuncu Seçim Aşaması",
+            description=f"Sıra: **Takım {team}** — {rep.mention}",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(
+            name="🔴 Takım 1",
+            value="\n".join(m.display_name for m in self.game.team1) or "—",
+            inline=True,
+        )
+        embed.add_field(
+            name="🔵 Takım 2",
+            value="\n".join(m.display_name for m in self.game.team2) or "—",
+            inline=True,
+        )
+        embed.add_field(
+            name="⏳ Kalan",
+            value=", ".join(m.display_name for m in remaining) or "—",
+            inline=False,
+        )
+        return embed
+
+    async def _pick(self, interaction: discord.Interaction):
+        rep, team = self._current_rep()
+        if interaction.user.id != rep.id:
+            await interaction.response.send_message(
+                f"Şu an Takım {team}'nin ({rep.display_name}) sırası!", ephemeral=True
+            )
+            return
+
+        picked_ids = {p.id for p in self.game.team1 + self.game.team2}
+        available = [p for p in self.game.all_players if p.id not in picked_ids]
+
+        if not available:
+            await interaction.response.defer()
+            return
+
+        select = discord.ui.Select(
+            placeholder="Oyuncu seç...",
+            options=[
+                discord.SelectOption(label=p.display_name, value=str(p.id))
+                for p in available
+            ],
+        )
+        select_view = discord.ui.View(timeout=60)
+        select_view.add_item(select)
+
+        async def on_select(inter: discord.Interaction):
+            player_id = int(select.values[0])
+            player = next((p for p in available if p.id == player_id), None)
+            if not player:
+                await inter.response.edit_message(content="Oyuncu bulunamadı.", view=None)
+                return
+
+            if team == 1:
+                self.game.team1.append(player)
+            else:
+                self.game.team2.append(player)
+
+            await inter.response.edit_message(
+                content=f"✅ **{player.display_name}** Takım {team}'e eklendi!", view=None
+            )
+
+            picked_ids_new = {p.id for p in self.game.team1 + self.game.team2}
+            remaining_new = [p for p in self.game.all_players if p.id not in picked_ids_new]
+
+            if remaining_new:
+                self._add_button()
+                if self.game.summary_msg:
+                    await self.game.summary_msg.edit(embed=self.build_embed(), view=self)
+            else:
+                if self.game.summary_msg:
+                    await self.game.summary_msg.edit(
+                        embed=self.game.build_summary_embed(), view=None
+                    )
+                self.game.action_queue = _build_team_action_queue(self.game.team_size)
+                self.game.action_index = 0
+                await self.game.advance(inter.channel)
+
+        select.callback = on_select
+        await interaction.response.send_message(
+            "Takımına almak istediğin oyuncuyu seç:", view=select_view, ephemeral=True
+        )
+
+
 class TeamSelectionView(discord.ui.View):
     def __init__(self, game: TeamGame):
         super().__init__(timeout=60)
@@ -741,9 +850,9 @@ class TeamSelectionView(discord.ui.View):
             return
         self.game.assign_teams(chosen_team)
         self.stop()
-        await interaction.response.edit_message(embed=self.game.build_summary_embed(), view=None)
+        draft_view = PlayerDraftView(self.game)
+        await interaction.response.edit_message(embed=draft_view.build_embed(), view=draft_view)
         self.game.summary_msg = await interaction.original_response()
-        await self.game._prompt_action(interaction.channel, self.game.current_action())
 
 
 class TeamMapBanView(discord.ui.View):
@@ -1559,6 +1668,22 @@ class MostPlayedTypeView(discord.ui.View):
 @bot.tree.command(name="mostplayed", description="En çok oynanan medeniyetleri FFA veya teamer modunda sıralı göster")
 async def mostplayed_command(interaction: discord.Interaction):
     await interaction.response.send_message("Hangi mod?", view=MostPlayedTypeView())
+
+
+@bot.tree.command(name="stop", description="Bu kanaldaki aktif oyunu iptal et")
+async def stop_cmd(interaction: discord.Interaction):
+    channel_id = interaction.channel_id
+    stopped = False
+    if channel_id in active_ffa_games:
+        del active_ffa_games[channel_id]
+        stopped = True
+    if channel_id in active_team_games:
+        del active_team_games[channel_id]
+        stopped = True
+    if stopped:
+        await interaction.response.send_message("🛑 Aktif oyun iptal edildi.", ephemeral=False)
+    else:
+        await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
 @bot.tree.command(name="help", description="Tüm bot komutlarını ve açıklamalarını listele")
