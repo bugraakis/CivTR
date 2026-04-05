@@ -1784,50 +1784,44 @@ async def stop_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="help", description="Tüm bot komutlarını ve açıklamalarını listele")
 async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(title="📖 Civ6 Bot Commands", color=discord.Color.blurple())
+    embed = discord.Embed(
+        title="📖 Simfest Bot — Komutlar",
+        description="Civilization VI draft ve turnuva yönetimi için tüm komutlar aşağıda listelenmiştir.",
+        color=discord.Color.blurple(),
+    )
     embed.add_field(
-        name="/ffa",
-        value="Ses kanalındaki oyuncularla harita oyu → civ ban (emoji reaksiyon) → lider havuzu dağıtımı.",
+        name="⚔️ /ffa",
+        value="Ses kanalındaki tüm oyuncularla FFA draft başlatır. Önce harita oylaması yapılır, ardından herkes listeden bir lider banlar, son olarak kalan liderler oyunculara rastgele havuz olarak dağıtılır.",
         inline=False,
     )
     embed.add_field(
-        name="/team @rakip",
-        value="Ses kanalıyla 2 takımlı sıralı draft: 6 harita ban → civ ban turu → sıralı civ seçim.",
+        name="🤝 /team @rakip",
+        value="Ses kanalındaki oyuncularla 2 takımlı sıralı draft başlatır. Takım temsilcileri sırayla harita banlar, lider banlar ve lider seçer. Seçimler listeden yapılır.",
         inline=False,
     )
     embed.add_field(
-        name="/autodraftffa",
-        value="Oyuncu sayısını seç, lider ban et → havuzlar otomatik dağıtılır (ses kanalı gerekmez).",
+        name="🎲 /autodraftffa",
+        value="Ses kanalı gerekmez. Oyuncu sayısını seçip istediğin liderleri banladıktan sonra kalan liderler oyunculara otomatik olarak eşit dağıtılır.",
         inline=False,
     )
     embed.add_field(
-        name="/autodraftteam",
-        value="Takım sayısını seç, lider ban et → her takıma otomatik dağıtılır (ses kanalı gerekmez).",
+        name="🎲 /autodraftteam",
+        value="Ses kanalı gerekmez. Takım sayısını seçip istediğin liderleri banladıktan sonra kalan liderler takımlara otomatik olarak eşit dağıtılır.",
         inline=False,
     )
     embed.add_field(
-        name="/id",
-        value="Yeni maç sonucu gir (otomatik ID üretilir, ELO kaydedilir) · Kendi istatistiklerine bak.",
+        name="🏆 /leaderboard",
+        value="Sunucudaki oyuncuların ELO sıralamasını gösterir. ⚔️ FFA veya 🤝 Teamer modunu buton ile seçebilir, ◀ ▶ ile sayfalar arasında gezinebilirsin.",
         inline=False,
     )
     embed.add_field(
-        name="/report <maç_id>",
-        value="Draft'ta üretilen ID ile sonucu raporla. `FFA-XXXXXX` → FFA sıralaması, `TEAM-XXXXXX` → takım sonucu. Her satıra `@oyuncu <medeniyet_emojisi>` yaz.",
+        name="🎖️ /mostplayed",
+        value="Sunucuda en çok oynanan liderleri listeler. FFA veya Teamer modunu buton ile seçebilirsin.",
         inline=False,
     )
     embed.add_field(
-        name="/leaderboard",
-        value="FFA ve teamer ELO sıralaması. ⚔️ FFA / 🤝 Teamer butonuyla mod, ◀ ▶ ile sayfa değiştir.",
-        inline=False,
-    )
-    embed.add_field(
-        name="/mostplayed",
-        value="En çok oynanan medeniyetleri göster. FFA veya teamer modunu butonla seç.",
-        inline=False,
-    )
-    embed.add_field(
-        name="⚙️ Emoji Ayarı",
-        value="`civ_emojis.py` dosyasına her medeniyetin Discord emojisini ekle.",
+        name="🛑 /stop",
+        value="Bu kanalda aktif olan draft oturumunu iptal eder.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -1845,7 +1839,7 @@ async def on_ready():
         await bot.tree.sync(guild=guild)
     print(f"✅ {bot.user} olarak giriş yapıldı.")
     print(f"✅ Slash komutları {len(bot.guilds)} sunucuya senkronize edildi.")
-    await bot.change_presence(activity=discord.Game(name="Civilization VI | /ffa"))
+    await bot.change_presence(activity=discord.Game(name="Simfest"))
 
 
 # ===========================================================================
