@@ -292,9 +292,58 @@ def _find_leader(name: str) -> tuple[str, str] | None:
     for civ, leader in ALL_LEADERS:
         if leader.lower() == name_lower:
             return civ, leader
-    # Partial match fallback
     matches = [(c, l) for c, l in ALL_LEADERS if name_lower in l.lower()]
     return matches[0] if len(matches) == 1 else None
+
+
+class LeaderSelectView(discord.ui.View):
+    """Paginated leader select sent as ephemeral. Calls on_pick(inter, civ, leader) on selection."""
+
+    def __init__(self, available: list[tuple[str, str]], on_pick, page: int = 0):
+        super().__init__(timeout=120)
+        self.available = available
+        self.on_pick = on_pick
+        self.page = page
+        self._rebuild()
+
+    def _rebuild(self):
+        self.clear_items()
+        pages = [self.available[i:i+25] for i in range(0, len(self.available), 25)]
+        if not pages:
+            return
+        page_leaders = pages[self.page]
+        sel = discord.ui.Select(
+            placeholder=f"Lider seç — Sayfa {self.page+1}/{len(pages)}",
+            options=[
+                discord.SelectOption(label=l, value=f"{c}||{l}", description=c)
+                for c, l in page_leaders
+            ],
+        )
+        sel.callback = self._on_select
+        self.add_item(sel)
+        if self.page > 0:
+            btn = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary)
+            btn.callback = self._prev
+            self.add_item(btn)
+        if self.page < len(pages) - 1:
+            btn = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary)
+            btn.callback = self._next
+            self.add_item(btn)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        val = interaction.data["values"][0]
+        civ, leader = val.split("||", 1)
+        await self.on_pick(interaction, civ, leader)
+
+    async def _prev(self, interaction: discord.Interaction):
+        self.page -= 1
+        self._rebuild()
+        await interaction.response.edit_message(view=self)
+
+    async def _next(self, interaction: discord.Interaction):
+        self.page += 1
+        self._rebuild()
+        await interaction.response.edit_message(view=self)
 
 
 class BanPhaseView(discord.ui.View):
@@ -322,7 +371,7 @@ class BanPhaseView(discord.ui.View):
 
         embed = discord.Embed(
             title="🚫 Lider Ban Aşaması",
-            description="**🚫 Ban Yap** butonuna bas ve lider adını yaz.",
+            description="**🚫 Ban Yap** butonuna bas, listeden lider seç.",
             color=discord.Color.orange(),
         )
         embed.add_field(name="Durum", value="\n".join(status_lines), inline=False)
@@ -341,37 +390,26 @@ class BanPhaseView(discord.ui.View):
 
         game_ref = self.game
         view_ref = self
+        used_pairs = game_ref.get_banned_pairs()
+        available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in used_pairs]
 
-        class BanModal(discord.ui.Modal, title="Lider Banla"):
-            leader_input = discord.ui.TextInput(
-                label="Lider Adı",
-                placeholder="Örnek: Abraham Lincoln",
-                min_length=2,
-                max_length=60,
-            )
+        async def on_pick(inter: discord.Interaction, civ: str, leader: str):
+            if (civ, leader) in game_ref.get_banned_pairs():
+                await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
+                return
+            game_ref.record_ban(player.id, (civ, leader))
+            await inter.response.edit_message(content=f"✅ **{leader}** ({civ}) banlandı!", view=None)
+            embed = view_ref.build_embed()
+            if view_ref.message:
+                if game_ref.all_bans_done():
+                    await view_ref.message.edit(embed=embed, view=view_ref)
+                    await _finalize_ffa_pools(inter.channel, game_ref, ban_message=view_ref.message)
+                else:
+                    await view_ref.message.edit(embed=embed, view=view_ref)
 
-            async def on_submit(self, inter: discord.Interaction):
-                result = _find_leader(self.leader_input.value)
-                if result is None:
-                    await inter.response.send_message(
-                        f"**{self.leader_input.value}** bulunamadı. Tam adı yaz.", ephemeral=True
-                    )
-                    return
-                civ, leader = result
-                if (civ, leader) in game_ref.get_banned_pairs():
-                    await inter.response.send_message(f"**{leader}** zaten banlandı!", ephemeral=True)
-                    return
-                game_ref.record_ban(player.id, (civ, leader))
-                embed = view_ref.build_embed()
-                await inter.response.send_message(f"✅ **{leader}** banlandı!", ephemeral=True)
-                if view_ref.message:
-                    if game_ref.all_bans_done():
-                        await view_ref.message.edit(embed=embed, view=view_ref)
-                        await _finalize_ffa_pools(inter.channel, game_ref, ban_message=view_ref.message)
-                    else:
-                        await view_ref.message.edit(embed=embed, view=view_ref)
-
-        await interaction.response.send_modal(BanModal())
+        await interaction.response.send_message(
+            "Banlamak istediğin lideri seç:", view=LeaderSelectView(available, on_pick), ephemeral=True
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -935,48 +973,29 @@ class TeamCivActionView(discord.ui.View):
 
         used_leaders = {l for _, l in game_ref.banned_leaders} | {l for _, l in game_ref.picked_leaders}
         available = [(c, l) for c, l in ALL_LEADERS if l not in used_leaders]
-        leader_list = "\n".join(f"`{l}` — {c}" for c, l in available[:60])
-        if len(available) > 60:
-            leader_list += f"\n*...ve {len(available)-60} lider daha*"
+
+        async def on_pick(inter: discord.Interaction, civ: str, leader: str):
+            used_now = {l for _, l in game_ref.banned_leaders} | {l for _, l in game_ref.picked_leaders}
+            if leader in used_now:
+                status = "banlandı" if leader in {l for _, l in game_ref.banned_leaders} else "seçildi"
+                await inter.response.edit_message(content=f"**{leader}** zaten {status}!", view=None)
+                return
+            if action_type == "civ_ban":
+                game_ref.banned_leaders.append((team, leader))
+            else:
+                game_ref.picked_leaders.append((team, leader))
+            act_word = "banlandı" if action_type == "civ_ban" else "seçildi"
+            await inter.response.edit_message(content=f"✅ **{leader}** ({civ}) {act_word}!", view=None)
+            for item in view_ref.children:
+                item.disabled = True
+            await game_ref.advance(inter.channel)
 
         action_word = "Banlamak" if action_type == "civ_ban" else "Seçmek"
-        action_title = "Lider Banla" if action_type == "civ_ban" else "Lider Seç"
-
-        class CivActionModal(discord.ui.Modal, title=action_title):
-            leader_input = discord.ui.TextInput(
-                label="Lider Adı",
-                placeholder="Örnek: Abraham Lincoln",
-                min_length=2,
-                max_length=60,
-            )
-
-            async def on_submit(self, inter: discord.Interaction):
-                result = _find_leader(self.leader_input.value)
-                if result is None:
-                    await inter.response.send_message(
-                        f"**{self.leader_input.value}** bulunamadı. Tam adı yaz.", ephemeral=True
-                    )
-                    return
-                civ, leader = result
-                used_now = {l for _, l in game_ref.banned_leaders} | {l for _, l in game_ref.picked_leaders}
-                if leader in used_now:
-                    status = "banlandı" if leader in {l for _, l in game_ref.banned_leaders} else "seçildi"
-                    await inter.response.send_message(f"**{leader}** zaten {status}!", ephemeral=True)
-                    return
-
-                if action_type == "civ_ban":
-                    game_ref.banned_leaders.append((team, leader))
-                else:
-                    game_ref.picked_leaders.append((team, leader))
-
-                act_word = "banlandı" if action_type == "civ_ban" else "seçildi"
-                await inter.response.send_message(f"✅ **{leader}** ({civ}) {act_word}!", ephemeral=True)
-
-                for item in view_ref.children:
-                    item.disabled = True
-                await game_ref.advance(inter.channel)
-
-        await interaction.response.send_modal(CivActionModal())
+        await interaction.response.send_message(
+            f"{action_word} istediğin lideri seç:",
+            view=LeaderSelectView(available, on_pick),
+            ephemeral=True,
+        )
 
 
 # ===========================================================================
