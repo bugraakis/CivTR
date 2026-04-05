@@ -98,8 +98,8 @@ def get_voice_members(interaction: discord.Interaction) -> list[discord.Member]:
 
 
 def _make_match_id(prefix: str) -> str:
-    """Generate a short random match ID like FFA-A3K7X2."""
-    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    """Generate a short random match ID like FFA-A3K7X2B9C1D4E5."""
+    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
     return f"{prefix}-{code}"
 
 
@@ -1603,7 +1603,7 @@ async def id_command(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, puan otomatik güncellenir")
-@app_commands.describe(match_id="Maç ID'si (örnek: FFA-A3K7X2 veya TEAM-B5K8X1)")
+@app_commands.describe(match_id="Maç ID'si (örnek: FFA-A3K7X2B9C1D4E5)")
 async def report_command(interaction: discord.Interaction, match_id: str):
     mid = match_id.upper().strip()
     if mid.startswith("FFA-"):
