@@ -287,12 +287,12 @@ class MapSelectionView(discord.ui.View):
 # ---------------------------------------------------------------------------
 
 class BanPhaseView(discord.ui.View):
-    """Single message shared by all players. Each reacts with a civ emoji then clicks Confirm."""
+    """Single message shared by all players. Each clicks Ban button to pick a civ from dropdown."""
 
     def __init__(self, game: FFAGame):
         super().__init__(timeout=None)
         self.game = game
-        self.message: discord.Message | None = None  # set after send
+        self.message: discord.Message | None = None
 
     def build_embed(self) -> discord.Embed:
         status_lines = []
@@ -303,59 +303,56 @@ class BanPhaseView(discord.ui.View):
             else:
                 status_lines.append(f"⏳ {player.mention}")
 
-        civ_ref = "  ".join(
-            f"{civ_emoji_str(c)}`{c}`" for c in CIVS if CIV_EMOJIS.get(c)
-        ) or "*(civ_emojis.py henüz doldurulmadı)*"
-
         embed = discord.Embed(
             title="🚫 Medeniyet Ban Aşaması",
-            description=(
-                "Banlamak istediğin medeniyetin emojisini **bu mesaja** ekle, "
-                "ardından **✅ Onayla**'ya bas. Herkes aynı anda yapabilir."
-            ),
+            description="Aşağıdaki **🚫 Ban Yap** butonuna bas ve banlamak istediğin medeniyeti seç.",
             color=discord.Color.orange(),
         )
         embed.add_field(name="Durum", value="\n".join(status_lines), inline=False)
-        embed.add_field(name="Medeniyet Emojileri", value=civ_ref[:1024], inline=False)
         return embed
 
-    @discord.ui.button(label="✅ Onayla", style=discord.ButtonStyle.green)
-    async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="🚫 Ban Yap", style=discord.ButtonStyle.danger)
+    async def ban_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         player = next((p for p in self.game.players if p.id == interaction.user.id), None)
         if not player:
             await interaction.response.send_message("Bu oyuna dahil değilsin!", ephemeral=True)
             return
-
         if player.id in self.game.bans:
             await interaction.response.send_message("Zaten ban yaptın!", ephemeral=True)
             return
 
-        # Read this specific player's reactions on the shared message
-        message = await interaction.channel.fetch_message(interaction.message.id)
-        banned_civ: str | None = None
-        for reaction in message.reactions:
-            async for user in reaction.users():
-                if user.id == player.id:
-                    banned_civ = emoji_to_civ(str(reaction.emoji))
-                    break
-            if banned_civ:
-                break
+        used_civs = set(self.game.bans.values())
+        available = [c for c in CIVS if c not in used_civs]
+        pages = [available[i:i+25] for i in range(0, len(available), 25)]
 
-        if not banned_civ:
-            await interaction.response.send_message(
-                "Önce banlamak istediğin medeniyetin emojisini bu mesaja ekle, sonra Onayla'ya bas.",
-                ephemeral=True,
+        select_view = discord.ui.View(timeout=60)
+        for page in pages[:4]:
+            select = discord.ui.Select(
+                placeholder="Medeniyet seç...",
+                options=[
+                    discord.SelectOption(label=c, value=c, emoji=civ_emoji_str(c) or None)
+                    for c in page
+                ],
             )
-            return
 
-        self.game.record_ban(player.id, banned_civ)
-        embed = self.build_embed()
+            async def on_select(inter: discord.Interaction, s=select):
+                chosen = s.values[0]
+                self.game.record_ban(player.id, chosen)
+                embed = self.build_embed()
+                await inter.response.edit_message(content=f"✅ **{chosen}** banlandı!", view=None)
+                if self.message:
+                    if self.game.all_bans_done():
+                        await self.message.edit(embed=embed, view=self)
+                        await _finalize_ffa_pools(interaction.channel, self.game, ban_message=self.message)
+                    else:
+                        await self.message.edit(embed=embed, view=self)
 
-        if self.game.all_bans_done():
-            await interaction.response.edit_message(embed=embed, view=self)
-            await _finalize_ffa_pools(interaction.channel, self.game, ban_message=self.message)
-        else:
-            await interaction.response.edit_message(embed=embed, view=self)
+            select.callback = on_select
+            select_view.add_item(select)
+
+        await interaction.response.send_message(
+            "Banlamak istediğin medeniyeti seç:", view=select_view, ephemeral=True
+        )
 
 
 # ---------------------------------------------------------------------------
