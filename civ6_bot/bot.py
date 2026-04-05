@@ -1220,7 +1220,7 @@ class AutoDraftCountView(discord.ui.View):
 # Slash Commands
 # ===========================================================================
 
-@bot.tree.command(name="team", description="Ses kanalındaki oyuncularla 2 takımlı sıralı draft başlatır: harita ban, lider ban ve lider seçim")
+@bot.tree.command(name="team", description="2 takımlı sıralı draft: harita ban, lider ban ve lider seçim")
 @app_commands.describe(opponent="Rakip takımın temsilcisini etiketle")
 async def team_command(interaction: discord.Interaction, opponent: discord.Member):
     if interaction.channel_id in active_team_games:
@@ -1263,7 +1263,7 @@ async def team_command(interaction: discord.Interaction, opponent: discord.Membe
     await interaction.response.send_message(embed=embed, view=TeamSelectionView(game))
 
 
-@bot.tree.command(name="ffa", description="Ses kanalındaki oyuncularla FFA draft başlatır: harita oylaması, lider ban ve havuz dağıtımı")
+@bot.tree.command(name="ffa", description="FFA draft: harita oylaması, lider ban ve lider havuzu dağıtımı")
 async def ffa_command(interaction: discord.Interaction):
     if interaction.channel_id in active_ffa_games:
         await interaction.response.send_message(
@@ -1617,12 +1617,12 @@ async def report_command(interaction: discord.Interaction, match_id: str):
         )
 
 
-@bot.tree.command(name="autodraftffa", description="Ses kanalı olmadan FFA draft: oyuncu sayısını seç, lider banla, havuzlar otomatik dağıtılır")
+@bot.tree.command(name="autodraftffa", description="Ses kanalı olmadan FFA draft: oyuncu sayısını seç ve lider banla")
 async def autodraftffa_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç oyuncu?", view=AutoDraftFfaCountView())
 
 
-@bot.tree.command(name="autodraftteam", description="Ses kanalı olmadan takım drafti: takım sayısını seç, lider banla, liderler takımlara otomatik dağıtılır")
+@bot.tree.command(name="autodraftteam", description="Ses kanalı olmadan takım drafti: takım sayısını seç ve lider banla")
 async def autodraftteam_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç takım olsun?", view=AutoDraftCountView())
 
