@@ -1357,7 +1357,7 @@ class FfaResultModal(discord.ui.Modal, title="FFA Maç Sonucu"):
             if pid and pid in elo_by_id:
                 r     = elo_by_id[pid]
                 sign  = "+" if r.delta >= 0 else ""
-                suffix = f"  `{sign}{r.delta} ELO`"
+                suffix = f"  `{sign}{r.delta} puan`"
             ranking_parts.append(f"**{i + 1}.** {line}{suffix}")
 
         embed = discord.Embed(
@@ -1466,7 +1466,7 @@ class FfaReportModal(discord.ui.Modal, title="FFA Maç Sonucu"):
             if pid and pid in elo_by_id:
                 r    = elo_by_id[pid]
                 sign = "+" if r.delta >= 0 else ""
-                suffix = f"  `{sign}{r.delta} ELO`"
+                suffix = f"  `{sign}{r.delta} puan`"
             ranking_parts.append(f"**{i + 1}.** {line}{suffix}")
 
         embed = discord.Embed(
@@ -1553,7 +1553,7 @@ class ResultEntryView(discord.ui.View):
         await interaction.response.send_modal(TeamerResultModal())
 
 
-@bot.tree.command(name="id", description="Maç sonucunu girerek ELO puanı kazan veya kendi istatistiklerine göz at")
+@bot.tree.command(name="id", description="Maç sonucunu girerek puan kazan veya kendi istatistiklerine göz at")
 async def id_command(interaction: discord.Interaction):
     uid  = str(interaction.user.id)
     name = interaction.user.display_name
@@ -1576,33 +1576,33 @@ async def id_command(interaction: discord.Interaction):
         embed.add_field(
             name="⚔️ FFA",
             value=(
-                f"ELO: **{ffa['rating']}**\n"
+                f"Puan: **{ffa['rating']}**\n"
                 f"Maç: {ffa['games']}  ·  1. sıra: {ffa['wins']}  ·  %{win_pct}\n"
                 f"En çok oynadıkları:\n{civ_lines(ffa_civs)}"
             ),
             inline=True,
         )
     else:
-        embed.add_field(name="⚔️ FFA", value=f"Henüz kayıt yok.\nBaşlangıç ELO: **{db.FFA_START}**", inline=True)
+        embed.add_field(name="⚔️ FFA", value=f"Henüz kayıt yok.\nBaşlangıç puanı: **{db.FFA_START}**", inline=True)
 
     if team:
         win_pct = round(100 * team["wins"] / team["games"], 1) if team["games"] else 0
         embed.add_field(
             name="🤝 Teamer",
             value=(
-                f"ELO: **{team['rating']}**\n"
+                f"Puan: **{team['rating']}**\n"
                 f"Galibiyet/Mağlubiyet: {team['wins']}/{team['losses']}  ·  %{win_pct}\n"
                 f"En çok oynadıkları:\n{civ_lines(team_civs)}"
             ),
             inline=True,
         )
     else:
-        embed.add_field(name="🤝 Teamer", value=f"Henüz kayıt yok.\nBaşlangıç ELO: **{db.TEAM_START}**", inline=True)
+        embed.add_field(name="🤝 Teamer", value=f"Henüz kayıt yok.\nBaşlangıç puanı: **{db.TEAM_START}**", inline=True)
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, ELO otomatik güncellenir")
+@bot.tree.command(name="report", description="Draft sırasında üretilen maç ID'siyle sonucu raporla, puan otomatik güncellenir")
 @app_commands.describe(match_id="Maç ID'si (örnek: FFA-A3K7X2 veya TEAM-B5K8X1)")
 async def report_command(interaction: discord.Interaction, match_id: str):
     mid = match_id.upper().strip()
@@ -1657,13 +1657,13 @@ class LeaderboardView(discord.ui.View):
             if self.mode == "ffa":
                 lines.append(
                     f"{prefix} {row['player_tag']} — "
-                    f"ELO **{row['rating']}** · {row['games']} maç · "
+                    f"Puan **{row['rating']}** · {row['games']} maç · "
                     f"%{row['win_pct'] or 0} 1.sıra"
                 )
             else:
                 lines.append(
                     f"{prefix} {row['player_tag']} — "
-                    f"ELO **{row['rating']}** · "
+                    f"Puan **{row['rating']}** · "
                     f"{row['wins']}G/{row['losses']}M · %{row['win_pct'] or 0}"
                 )
 
@@ -1725,7 +1725,7 @@ class LeaderboardView(discord.ui.View):
         return cb
 
 
-@bot.tree.command(name="leaderboard", description="Sunucudaki oyuncuların ELO sıralamasını gösterir, FFA veya Teamer modunu seçebilirsin")
+@bot.tree.command(name="leaderboard", description="Sunucudaki oyuncuların puan sıralamasını gösterir, FFA veya Teamer modunu seçebilirsin")
 async def leaderboard_command(interaction: discord.Interaction):
     view  = LeaderboardView("ffa")
     await interaction.response.send_message(embed=view.build_embed(), view=view)
@@ -1826,7 +1826,7 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="🏆 /leaderboard",
-        value="Sunucudaki oyuncuların ELO sıralamasını gösterir. ⚔️ FFA veya 🤝 Teamer modunu buton ile seçebilir, ◀ ▶ ile sayfalar arasında gezinebilirsin.",
+        value="Sunucudaki oyuncuların puan sıralamasını gösterir. ⚔️ FFA veya 🤝 Teamer modunu buton ile seçebilir, ◀ ▶ ile sayfalar arasında gezinebilirsin.",
         inline=False,
     )
     embed.add_field(
