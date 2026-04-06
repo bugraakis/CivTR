@@ -192,9 +192,8 @@ def _distribute_leaders(
     random.shuffle(remaining)
     n = len(members)
     per_player = len(remaining) // n
+    remaining = remaining[:n * per_player]  # discard remainder so all players get equal pools
     pools = {m: remaining[i * per_player : (i + 1) * per_player] for i, m in enumerate(members)}
-    for i, pair in enumerate(remaining[n * per_player :]):
-        pools[members[i]].append(pair)
     return pools
 
 
@@ -1087,9 +1086,8 @@ class AutoDraftFfaSession:
         random.shuffle(remaining)
         n = self.player_count
         per_player = len(remaining) // n
+        remaining = remaining[:n * per_player]  # discard remainder so all players get equal pools
         pools = [remaining[i * per_player : (i + 1) * per_player] for i in range(n)]
-        for i, pair in enumerate(remaining[n * per_player :]):
-            pools[i].append(pair)
 
         guild = interaction.guild
         embeds = []
@@ -1216,9 +1214,8 @@ class AutoDraftSession:
         random.shuffle(remaining)
         n = self.team_count
         per_team = len(remaining) // n
+        remaining = remaining[:n * per_team]  # discard remainder so all teams get equal pools
         teams = [remaining[i * per_team : (i + 1) * per_team] for i in range(n)]
-        for i, pair in enumerate(remaining[n * per_team :]):
-            teams[i].append(pair)
 
         guild = interaction.guild
         embeds = []
