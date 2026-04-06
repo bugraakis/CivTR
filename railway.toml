@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "cd civ6_bot && python bot.py"
+restartPolicyType = "always"
