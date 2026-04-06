@@ -1823,6 +1823,324 @@ async def coinflip_command(interaction: discord.Interaction):
     await interaction.response.send_message(f"🪙 **{result}!**")
 
 
+# ---------------------------------------------------------------------------
+# /createreportid — Adım adım maç raporu wizard'ı
+# ---------------------------------------------------------------------------
+
+async def _wizard_edit(interaction: discord.Interaction, content: str, view: discord.ui.View | None, embed: discord.Embed | None = None):
+    """Mesajı güvenli şekilde düzenle; farklı interaction durumlarını yönet."""
+    kwargs = {"content": content, "view": view, "embed": embed}
+    try:
+        if interaction.response.is_done():
+            await interaction.edit_original_response(**kwargs)
+        else:
+            await interaction.response.edit_message(**kwargs)
+    except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+        pass
+
+
+class _UserSelectWidget(discord.ui.UserSelect):
+    """Tek kullanıcı seçimi için yardımcı Select widget."""
+
+    def __init__(self, placeholder: str, on_select):
+        super().__init__(placeholder=placeholder, min_values=1, max_values=1)
+        self._on_select = on_select
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            await self._on_select(interaction, self.values[0])
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
+
+
+# ---- FFA Wizard ----
+
+class FfaReportWizard:
+    """FFA maç raporu için adım adım durum makinesi."""
+
+    def __init__(self, player_count: int):
+        self.player_count = player_count
+        self.match_id = _make_match_id("FFA")
+        self.members: list[discord.Member] = []   # 1.yer → son sıra
+        self.civs: list[str] = []                 # her oyuncu için lider adı
+
+    def _progress_header(self) -> str:
+        lines = []
+        for i, m in enumerate(self.members):
+            civ_txt = f" — {self.civs[i]}" if i < len(self.civs) else ""
+            lines.append(f"**{i+1}.** {m.display_name}{civ_txt}")
+        return "\n".join(lines)
+
+    async def show_pick_player(self, interaction: discord.Interaction):
+        i = len(self.members)
+        wizard = self
+
+        async def on_member(inter: discord.Interaction, member: discord.Member):
+            if member in wizard.members:
+                await _safe_send(inter, "Bu oyuncu zaten eklendi!", ephemeral=True)
+                return
+            wizard.members.append(member)
+            await wizard.show_pick_civ(inter)
+
+        view = discord.ui.View(timeout=300)
+        view.add_item(_UserSelectWidget(f"{i+1}. sıradaki oyuncuyu seç", on_member))
+        header = self._progress_header()
+        content = (f"**⚔️ FFA Raporu — Oyuncu {i+1}/{self.player_count}**\n"
+                   f"1. sıra = birinci yer\n"
+                   + (f"\n{header}" if header else ""))
+        await _wizard_edit(interaction, content, view)
+
+    async def show_pick_civ(self, interaction: discord.Interaction):
+        member = self.members[-1]
+        idx = len(self.members) - 1
+        used_leaders = set(self.civs)
+        available = [(c, l) for c, l in ALL_LEADERS if l not in used_leaders]
+        wizard = self
+
+        async def on_pick(inter: discord.Interaction, _civ: str, leader: str):
+            wizard.civs.append(leader)
+            if len(wizard.civs) >= wizard.player_count:
+                await wizard.finalize(inter)
+            else:
+                await wizard.show_pick_player(inter)
+
+        view = LeaderSelectView(available, on_pick)
+        content = (f"**⚔️ FFA Raporu — Medeniyet {idx+1}/{self.player_count}**\n"
+                   f"**{member.display_name}** için medeniyet seç:\n\n"
+                   + self._progress_header())
+        await _wizard_edit(interaction, content, view)
+
+    async def finalize(self, interaction: discord.Interaction):
+        ordered = [(str(m.id), str(m)) for m in self.members]
+        for member, leader in zip(self.members, self.civs):
+            db.record_civ_play(str(member.id), str(member), leader, "ffa")
+
+        elo_results = db.record_ffa(ordered) if ordered else []
+        elo_by_id = {r.player_id: r for r in elo_results}
+
+        lines = []
+        for i, (member, leader) in enumerate(zip(self.members, self.civs)):
+            suffix = ""
+            pid = str(member.id)
+            if pid in elo_by_id:
+                r = elo_by_id[pid]
+                sign = "+" if r.delta >= 0 else ""
+                suffix = f"  `{sign}{r.delta} puan`"
+            lines.append(f"**{i+1}.** {member.mention} — {leader}{suffix}")
+
+        embed = discord.Embed(
+            title="⚔️ FFA Maç Sonucu",
+            description="\n".join(lines) or "—",
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text=f"Maç ID: {self.match_id}")
+        await _wizard_edit(interaction, "\u200b", None, embed)
+
+
+# ---- Team Wizard ----
+
+class TeamReportWizard:
+    """2-takımlı maç raporu için adım adım durum makinesi."""
+
+    def __init__(self, players_per_team: int):
+        self.players_per_team = players_per_team
+        self.match_id = _make_match_id("TEAM")
+        self.team_members: list[list[discord.Member]] = [[], []]
+        self.civs: list[str] = []   # self.all_members() sırasıyla lider adları
+        self._pick_team = 0
+        self._pick_slot = 0
+
+    def _total_players(self) -> int:
+        return self.players_per_team * 2
+
+    def all_members(self) -> list[tuple[int, discord.Member]]:
+        """(team_idx, member) listesi T1P1, T1P2, T2P1, T2P2 sırasıyla."""
+        result = []
+        for ti, team in enumerate(self.team_members):
+            for m in team:
+                result.append((ti, m))
+        return result
+
+    def _progress_header(self) -> str:
+        all_m = self.all_members()
+        lines = []
+        for idx, (ti, member) in enumerate(all_m):
+            civ_txt = f" — {self.civs[idx]}" if idx < len(self.civs) else ""
+            lines.append(f"{TEAM_EMOJIS[ti]} Takım {ti+1}: **{member.display_name}**{civ_txt}")
+        return "\n".join(lines)
+
+    async def show_pick_player(self, interaction: discord.Interaction):
+        ti = self._pick_team
+        si = self._pick_slot
+        wizard = self
+        filled = sum(len(t) for t in self.team_members)
+
+        async def on_member(inter: discord.Interaction, member: discord.Member):
+            already = [m for team in wizard.team_members for m in team]
+            if member in already:
+                await _safe_send(inter, "Bu oyuncu zaten eklendi!", ephemeral=True)
+                return
+            wizard.team_members[ti].append(member)
+            wizard._pick_slot += 1
+            if wizard._pick_slot >= wizard.players_per_team:
+                wizard._pick_slot = 0
+                wizard._pick_team += 1
+            if wizard._pick_team >= 2:
+                await wizard.show_pick_civ(inter, 0)
+            else:
+                await wizard.show_pick_player(inter)
+
+        view = discord.ui.View(timeout=300)
+        view.add_item(_UserSelectWidget(f"Takım {ti+1} — Oyuncu {si+1}", on_member))
+        header = self._progress_header()
+        content = (f"**🤝 Takımlı Raporu — Oyuncu {filled+1}/{self._total_players()}**\n"
+                   f"{TEAM_EMOJIS[ti]} **Takım {ti+1}**, Oyuncu {si+1} seç:\n"
+                   + (f"\n{header}" if header else ""))
+        await _wizard_edit(interaction, content, view)
+
+    async def show_pick_civ(self, interaction: discord.Interaction, civ_idx: int):
+        all_m = self.all_members()
+        ti, member = all_m[civ_idx]
+        used_leaders = set(self.civs)
+        available = [(c, l) for c, l in ALL_LEADERS if l not in used_leaders]
+        wizard = self
+
+        async def on_pick(inter: discord.Interaction, _civ: str, leader: str):
+            wizard.civs.append(leader)
+            next_idx = civ_idx + 1
+            if next_idx >= wizard._total_players():
+                await wizard.show_winner(inter)
+            else:
+                await wizard.show_pick_civ(inter, next_idx)
+
+        view = LeaderSelectView(available, on_pick)
+        content = (f"**🤝 Takımlı Raporu — Medeniyet {civ_idx+1}/{self._total_players()}**\n"
+                   f"{TEAM_EMOJIS[ti]} **{member.display_name}** (Takım {ti+1}) medeniyetini seç:\n\n"
+                   + self._progress_header())
+        await _wizard_edit(interaction, content, view)
+
+    async def show_winner(self, interaction: discord.Interaction):
+        wizard = self
+        t1_names = ", ".join(m.display_name for m in self.team_members[0])
+        t2_names = ", ".join(m.display_name for m in self.team_members[1])
+
+        view = discord.ui.View(timeout=300)
+        t1_btn = discord.ui.Button(label="🔴 Takım 1 Kazandı", style=discord.ButtonStyle.danger)
+        t2_btn = discord.ui.Button(label="🔵 Takım 2 Kazandı", style=discord.ButtonStyle.primary)
+
+        async def t1_won(inter: discord.Interaction):
+            await wizard.finalize(inter, winner_team=0)
+
+        async def t2_won(inter: discord.Interaction):
+            await wizard.finalize(inter, winner_team=1)
+
+        t1_btn.callback = t1_won
+        t2_btn.callback = t2_won
+        view.add_item(t1_btn)
+        view.add_item(t2_btn)
+
+        content = (f"**🤝 Takımlı Raporu — Sonuç**\n"
+                   f"🔴 **Takım 1:** {t1_names}\n"
+                   f"🔵 **Takım 2:** {t2_names}\n\n"
+                   f"Hangi takım kazandı?")
+        await _wizard_edit(interaction, content, view)
+
+    async def finalize(self, interaction: discord.Interaction, winner_team: int):
+        all_m = self.all_members()
+        member_leader = {m.id: leader for (_, m), leader in zip(all_m, self.civs)}
+
+        for ti, member in all_m:
+            leader = member_leader.get(member.id, "")
+            if leader:
+                db.record_civ_play(str(member.id), str(member), leader, "team")
+
+        loser_team = 1 - winner_team
+        w_players = [(str(m.id), str(m)) for m in self.team_members[winner_team]]
+        l_players = [(str(m.id), str(m)) for m in self.team_members[loser_team]]
+
+        w_results, l_results = (
+            db.record_team(w_players, l_players)
+            if w_players and l_players
+            else ([], [])
+        )
+        elo_by_id = {r.player_id: r for r in w_results + l_results}
+
+        def fmt_team(team_idx: int) -> str:
+            lines = []
+            for member in self.team_members[team_idx]:
+                leader = member_leader.get(member.id, "?")
+                suffix = ""
+                pid = str(member.id)
+                if pid in elo_by_id:
+                    r = elo_by_id[pid]
+                    sign = "+" if r.delta >= 0 else ""
+                    suffix = f"  `{sign}{r.delta} puan`"
+                lines.append(f"{member.mention} — {leader}{suffix}")
+            return "\n".join(lines) or "—"
+
+        embed = discord.Embed(title="🤝 Teamer Maç Sonucu", color=discord.Color.green())
+        embed.add_field(name=f"🏆 Takım {winner_team+1} (Kazanan)", value=fmt_team(winner_team), inline=False)
+        embed.add_field(name=f"💀 Takım {loser_team+1} (Kaybeden)", value=fmt_team(loser_team), inline=False)
+        embed.set_footer(text=f"Maç ID: {self.match_id}")
+        await _wizard_edit(interaction, "\u200b", None, embed)
+
+
+# ---- Type + Count Selector Views ----
+
+class _FfaPlayerCountView(discord.ui.View):
+    """FFA oyuncu sayısı seçimi (2–12)."""
+
+    def __init__(self):
+        super().__init__(timeout=120)
+        for n in range(2, 13):
+            btn = discord.ui.Button(label=str(n), style=discord.ButtonStyle.secondary)
+            btn.callback = self._make_cb(n)
+            self.add_item(btn)
+
+    def _make_cb(self, count: int):
+        async def cb(interaction: discord.Interaction):
+            wizard = FfaReportWizard(count)
+            await wizard.show_pick_player(interaction)
+        return cb
+
+
+class _TeamPlayerCountView(discord.ui.View):
+    """Takım başına oyuncu sayısı seçimi (2v2 – 6v6)."""
+
+    def __init__(self):
+        super().__init__(timeout=120)
+        for n in range(2, 7):
+            btn = discord.ui.Button(label=f"{n}v{n}", style=discord.ButtonStyle.secondary)
+            btn.callback = self._make_cb(n)
+            self.add_item(btn)
+
+    def _make_cb(self, count: int):
+        async def cb(interaction: discord.Interaction):
+            wizard = TeamReportWizard(count)
+            await wizard.show_pick_player(interaction)
+        return cb
+
+
+class _CreateReportTypeView(discord.ui.View):
+    """Maç türü seçimi: FFA veya Takımlı."""
+
+    def __init__(self):
+        super().__init__(timeout=120)
+
+    @discord.ui.button(label="⚔️ FFA", style=discord.ButtonStyle.primary)
+    async def ffa_btn(self, interaction: discord.Interaction, _):
+        await interaction.response.edit_message(content="Kaç oyuncu katıldı?", view=_FfaPlayerCountView())
+
+    @discord.ui.button(label="🤝 Takımlı", style=discord.ButtonStyle.success)
+    async def team_btn(self, interaction: discord.Interaction, _):
+        await interaction.response.edit_message(content="Takım başına kaç oyuncu?", view=_TeamPlayerCountView())
+
+
+@bot.tree.command(name="createreportid", description="Adım adım oyuncu ve medeniyet seçerek maç sonucunu kaydet")
+async def createreportid_command(interaction: discord.Interaction):
+    await interaction.response.send_message("Maç türünü seç:", view=_CreateReportTypeView())
+
+
 
 @bot.tree.command(name="stop", description="Bu kanaldaki aktif draft oturumunu iptal et")
 async def stop_cmd(interaction: discord.Interaction):
@@ -1885,6 +2203,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="🪙 /coinflip",
         value="Madeni parayı havaya at, yazı mı tura mı karar ver!",
+        inline=False,
+    )
+    embed.add_field(
+        name="📋 /createreportid",
+        value="Adım adım oyuncuları ve medeniyetleri seçerek maç sonucunu kaydet. FFA için sırayla oyuncu + medeniyet, takımlı için önce tüm oyuncular sonra medeniyetler seçilir.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
