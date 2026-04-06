@@ -87,6 +87,25 @@ intents.reactions = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------------------------------
+# Interaction error helper
+# ---------------------------------------------------------------------------
+
+async def _safe_send(interaction: discord.Interaction, content: str, ephemeral: bool = True):
+    """Etkileşim süresi dolmuş veya zaten yanıtlanmışsa sessizce geç."""
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(content, ephemeral=ephemeral)
+        else:
+            await interaction.response.send_message(content, ephemeral=ephemeral)
+    except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+        pass
+
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    await _safe_send(interaction, "❌ Bir hata oluştu, lütfen tekrar dene.")
+
+# ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
@@ -335,19 +354,28 @@ class LeaderSelectView(discord.ui.View):
             self.add_item(btn)
 
     async def _on_select(self, interaction: discord.Interaction):
-        val = interaction.data["values"][0]
-        civ, leader = val.split("||", 1)
-        await self.on_pick(interaction, civ, leader)
+        try:
+            val = interaction.data["values"][0]
+            civ, leader = val.split("||", 1)
+            await self.on_pick(interaction, civ, leader)
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
     async def _prev(self, interaction: discord.Interaction):
-        self.page -= 1
-        self._rebuild()
-        await interaction.response.edit_message(view=self)
+        try:
+            self.page -= 1
+            self._rebuild()
+            await interaction.response.edit_message(view=self)
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
     async def _next(self, interaction: discord.Interaction):
-        self.page += 1
-        self._rebuild()
-        await interaction.response.edit_message(view=self)
+        try:
+            self.page += 1
+            self._rebuild()
+            await interaction.response.edit_message(view=self)
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
 
 class BanPhaseView(discord.ui.View):
@@ -398,22 +426,28 @@ class BanPhaseView(discord.ui.View):
         available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in used_pairs]
 
         async def on_pick(inter: discord.Interaction, civ: str, leader: str):
-            if (civ, leader) in game_ref.get_banned_pairs():
-                await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
-                return
-            game_ref.record_ban(player.id, (civ, leader))
-            await inter.response.edit_message(content="\u200b", view=None)
-            embed = view_ref.build_embed()
-            if view_ref.message:
-                if game_ref.all_bans_done():
-                    await view_ref.message.edit(embed=embed, view=view_ref)
-                    await _finalize_ffa_pools(inter.channel, game_ref, ban_message=view_ref.message)
-                else:
-                    await view_ref.message.edit(embed=embed, view=view_ref)
+            try:
+                if (civ, leader) in game_ref.get_banned_pairs():
+                    await inter.response.edit_message(content=f"**{leader}** zaten banlandı!", view=None)
+                    return
+                game_ref.record_ban(player.id, (civ, leader))
+                await inter.response.edit_message(content="\u200b", view=None)
+                embed = view_ref.build_embed()
+                if view_ref.message:
+                    if game_ref.all_bans_done():
+                        await view_ref.message.edit(embed=embed, view=view_ref)
+                        await _finalize_ffa_pools(inter.channel, game_ref, ban_message=view_ref.message)
+                    else:
+                        await view_ref.message.edit(embed=embed, view=view_ref)
+            except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+                pass
 
-        await interaction.response.send_message(
-            "Banlamak istediğin lideri seç:", view=LeaderSelectView(available, on_pick), ephemeral=True
-        )
+        try:
+            await interaction.response.send_message(
+                "Banlamak istediğin lideri seç:", view=LeaderSelectView(available, on_pick), ephemeral=True
+            )
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -847,59 +881,64 @@ class PlayerDraftView(discord.ui.View):
         return embed
 
     async def _pick(self, interaction: discord.Interaction):
-        rep, team = self._current_rep()
-        if interaction.user.id != rep.id:
-            await interaction.response.send_message(
-                f"Şu an Takım {team}'nin ({rep.display_name}) sırası!", ephemeral=True
-            )
-            return
-
-        picked_ids = {p.id for p in self.game.team1 + self.game.team2}
-        available = [p for p in self.game.all_players if p.id not in picked_ids]
-
-        if not available:
-            await interaction.response.defer()
-            return
-
-        select = discord.ui.Select(
-            placeholder="Oyuncu seç...",
-            options=[
-                discord.SelectOption(label=p.display_name, value=str(p.id))
-                for p in available
-            ],
-        )
-
-        async def on_select(inter: discord.Interaction):
-            player_id = int(select.values[0])
-            player = next((p for p in available if p.id == player_id), None)
-            if not player:
-                await inter.response.defer()
+        try:
+            rep, team = self._current_rep()
+            if interaction.user.id != rep.id:
+                await interaction.response.send_message(
+                    f"Şu an Takım {team}'nin ({rep.display_name}) sırası!", ephemeral=True
+                )
                 return
 
-            if team == 1:
-                self.game.team1.append(player)
-            else:
-                self.game.team2.append(player)
+            picked_ids = {p.id for p in self.game.team1 + self.game.team2}
+            available = [p for p in self.game.all_players if p.id not in picked_ids]
 
-            picked_ids_new = {p.id for p in self.game.team1 + self.game.team2}
-            remaining_new = [p for p in self.game.all_players if p.id not in picked_ids_new]
+            if not available:
+                await interaction.response.defer()
+                return
 
-            if remaining_new:
-                self._add_button()
-                await inter.response.edit_message(embed=self.build_embed(), view=self)
-            else:
-                await inter.response.edit_message(
-                    embed=self.game.build_summary_embed(), view=None
-                )
-                self.game.action_queue = _build_team_action_queue(self.game.team_size)
-                self.game.action_index = 0
-                await self.game._start_action_queue(inter.channel)
+            select = discord.ui.Select(
+                placeholder="Oyuncu seç...",
+                options=[
+                    discord.SelectOption(label=p.display_name, value=str(p.id))
+                    for p in available
+                ],
+            )
 
-        select.callback = on_select
-        select_view = discord.ui.View(timeout=60)
-        select_view.add_item(select)
-        # Edit the main message to show the player select (no ephemeral popup)
-        await interaction.response.edit_message(embed=self.build_embed(), view=select_view)
+            async def on_select(inter: discord.Interaction):
+                try:
+                    player_id = int(select.values[0])
+                    player = next((p for p in available if p.id == player_id), None)
+                    if not player:
+                        await inter.response.defer()
+                        return
+
+                    if team == 1:
+                        self.game.team1.append(player)
+                    else:
+                        self.game.team2.append(player)
+
+                    picked_ids_new = {p.id for p in self.game.team1 + self.game.team2}
+                    remaining_new = [p for p in self.game.all_players if p.id not in picked_ids_new]
+
+                    if remaining_new:
+                        self._add_button()
+                        await inter.response.edit_message(embed=self.build_embed(), view=self)
+                    else:
+                        await inter.response.edit_message(
+                            embed=self.game.build_summary_embed(), view=None
+                        )
+                        self.game.action_queue = _build_team_action_queue(self.game.team_size)
+                        self.game.action_index = 0
+                        await self.game._start_action_queue(inter.channel)
+                except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+                    pass
+
+            select.callback = on_select
+            select_view = discord.ui.View(timeout=60)
+            select_view.add_item(select)
+            await interaction.response.edit_message(embed=self.build_embed(), view=select_view)
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
 
 class TeamSelectionView(discord.ui.View):
@@ -992,26 +1031,32 @@ class TeamCivActionView(discord.ui.View):
         available = [(c, l) for c, l in ALL_LEADERS if l not in used_leaders]
 
         async def on_pick(inter: discord.Interaction, civ: str, leader: str):
-            used_now = {l for _, l in game_ref.banned_leaders} | {l for _, l in game_ref.picked_leaders}
-            if leader in used_now:
-                status = "banlandı" if leader in {l for _, l in game_ref.banned_leaders} else "seçildi"
-                await inter.response.edit_message(content=f"**{leader}** zaten {status}!", view=None)
-                return
-            if action_type == "civ_ban":
-                game_ref.banned_leaders.append((team, leader))
-            else:
-                game_ref.picked_leaders.append((team, leader))
-            await inter.response.edit_message(content="\u200b", view=None)
-            for item in view_ref.children:
-                item.disabled = True
-            await game_ref.advance(inter.channel)
+            try:
+                used_now = {l for _, l in game_ref.banned_leaders} | {l for _, l in game_ref.picked_leaders}
+                if leader in used_now:
+                    status = "banlandı" if leader in {l for _, l in game_ref.banned_leaders} else "seçildi"
+                    await inter.response.edit_message(content=f"**{leader}** zaten {status}!", view=None)
+                    return
+                if action_type == "civ_ban":
+                    game_ref.banned_leaders.append((team, leader))
+                else:
+                    game_ref.picked_leaders.append((team, leader))
+                await inter.response.edit_message(content="\u200b", view=None)
+                for item in view_ref.children:
+                    item.disabled = True
+                await game_ref.advance(inter.channel)
+            except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+                pass
 
         action_word = "Banlamak" if action_type == "civ_ban" else "Seçmek"
-        await interaction.response.send_message(
-            f"{action_word} istediğin lideri seç:",
-            view=LeaderSelectView(available, on_pick),
-            ephemeral=True,
-        )
+        try:
+            await interaction.response.send_message(
+                f"{action_word} istediğin lideri seç:",
+                view=LeaderSelectView(available, on_pick),
+                ephemeral=True,
+            )
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
 
 # ===========================================================================
