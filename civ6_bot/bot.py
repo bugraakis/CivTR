@@ -2069,7 +2069,7 @@ class _TeamCountView(discord.ui.View):
                 except asyncio.TimeoutError:
                     await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
                     return
-                members = _parse_mentions(msg.content, interaction.guild)
+                members = [m for m in msg.mentions if isinstance(m, discord.Member)]
                 if not members:
                     await interaction.followup.send(
                         f"❌ Takım {ti+1} için en az bir oyuncu etiketle! Tekrar `/createreportid` kullan.",
@@ -2096,7 +2096,7 @@ class _CreateReportTypeView(discord.ui.View):
         except asyncio.TimeoutError:
             await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
             return
-        members = _parse_mentions(msg.content, interaction.guild)
+        members = [m for m in msg.mentions if isinstance(m, discord.Member)]
         if len(members) < 2:
             await interaction.followup.send(
                 "❌ En az 2 oyuncu etiketle! Tekrar `/createreportid` kullan.", ephemeral=True
