@@ -2067,8 +2067,8 @@ class TeamTagModal(discord.ui.Modal):
             field = discord.ui.TextInput(
                 label=f"Takım {i+1} — Oyuncuları etiketle",
                 placeholder="@Oyuncu1 @Oyuncu2 ...",
-                style=discord.TextStyle.short,
-                max_length=300,
+                style=discord.TextStyle.paragraph,
+                max_length=500,
             )
             self.add_item(field)
 
