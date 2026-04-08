@@ -105,6 +105,21 @@ async def _safe_send(interaction: discord.Interaction, content: str, ephemeral: 
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     await _safe_send(interaction, "❌ Bir hata oluştu, lütfen tekrar dene.")
 
+
+# View hataları @bot.tree.error'a düşmez, ayrıca yakala
+_orig_view_on_error = discord.ui.View.on_error
+
+async def _global_view_on_error(self, interaction: discord.Interaction, error: Exception, item):
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ Bir hata oluştu, tekrar dene.", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Bir hata oluştu, tekrar dene.", ephemeral=True)
+    except Exception:
+        pass
+
+discord.ui.View.on_error = _global_view_on_error
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -319,10 +334,10 @@ def _find_leader(name: str) -> tuple[str, str] | None:
 
 
 class LeaderSelectView(discord.ui.View):
-    """Paginated leader select sent as ephemeral. Calls on_pick(inter, civ, leader) on selection."""
+    """Paginated leader select. Calls on_pick(inter, civ, leader) on selection."""
 
     def __init__(self, available: list[tuple[str, str]], on_pick, page: int = 0):
-        super().__init__(timeout=120)
+        super().__init__(timeout=600)   # 10 dk — uzun sessionlar için
         self.available = available
         self.on_pick = on_pick
         self.page = page
@@ -352,6 +367,28 @@ class LeaderSelectView(discord.ui.View):
             btn.callback = self._next
             self.add_item(btn)
 
+    async def _safe_respond(self, interaction: discord.Interaction, msg: str):
+        """Herhangi bir hata durumunda interaction'a sessizce yanıt ver."""
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        except Exception:
+            pass
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+        """Herhangi bir exception interaction'ı cevapsız bırakmasın."""
+        await self._safe_respond(interaction, "❌ Bir hata oluştu, tekrar dene.")
+
+    async def on_timeout(self):
+        """Süre dolunca view'i mesajdan kaldır."""
+        if self.message:
+            try:
+                await self.message.edit(view=None)
+            except Exception:
+                pass
+
     async def _on_select(self, interaction: discord.Interaction):
         try:
             val = interaction.data["values"][0]
@@ -359,6 +396,8 @@ class LeaderSelectView(discord.ui.View):
             await self.on_pick(interaction, civ, leader)
         except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
             pass
+        except Exception:
+            await self._safe_respond(interaction, "❌ Bir hata oluştu, tekrar dene.")
 
     async def _prev(self, interaction: discord.Interaction):
         try:
@@ -367,6 +406,8 @@ class LeaderSelectView(discord.ui.View):
             await interaction.response.edit_message(view=self)
         except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
             pass
+        except Exception:
+            await self._safe_respond(interaction, "❌ Bir hata oluştu.")
 
     async def _next(self, interaction: discord.Interaction):
         try:
@@ -375,6 +416,8 @@ class LeaderSelectView(discord.ui.View):
             await interaction.response.edit_message(view=self)
         except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
             pass
+        except Exception:
+            await self._safe_respond(interaction, "❌ Bir hata oluştu.")
 
 
 class BanPhaseView(discord.ui.View):
