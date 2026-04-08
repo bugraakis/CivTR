@@ -1885,7 +1885,7 @@ class FfaReportWizard:
             wizard.civs.append(leader)
             nxt = len(wizard.civs)
             if nxt >= wizard.player_count:
-                await wizard.finalize(inter)
+                await inter.response.send_modal(_TurnModal(wizard.finalize))
             else:
                 await _wizard_edit(inter, wizard._civ_content(nxt), wizard._make_civ_view(nxt))
 
@@ -1894,7 +1894,7 @@ class FfaReportWizard:
     async def send_first(self, followup: discord.Webhook):
         await followup.send(content=self._civ_content(0), view=self._make_civ_view(0))
 
-    async def finalize(self, interaction: discord.Interaction):
+    async def finalize(self, interaction: discord.Interaction, turn: str | None = None):
         ordered = [(str(m.id), str(m)) for m in self.members]
         for member, leader in zip(self.members, self.civs):
             db.record_civ_play(str(member.id), str(member), leader, "ffa")
@@ -1917,7 +1917,10 @@ class FfaReportWizard:
             description="\n".join(lines) or "—",
             color=discord.Color.gold(),
         )
-        embed.set_footer(text=f"Maç ID: {self.match_id}")
+        footer = f"Maç ID: {self.match_id}"
+        if turn:
+            footer += f"  ·  Tur: {turn}"
+        embed.set_footer(text=footer)
         await _wizard_edit(interaction, "\u200b", None, embed)
 
 
@@ -1986,7 +1989,7 @@ class TeamReportWizard:
                 style=discord.ButtonStyle.secondary,
             )
             async def winner_cb(inter: discord.Interaction, t=ti):
-                await wizard.finalize(inter, t)
+                await inter.response.send_modal(_TurnModal(lambda i, turn, wt=t: wizard.finalize(i, wt, turn)))
             btn.callback = winner_cb
             view.add_item(btn)
 
@@ -1999,7 +2002,7 @@ class TeamReportWizard:
         content = "**🤝 Takımlı Raporu — Hangi takım kazandı?**\n\n" + "\n".join(lines)
         await _wizard_edit(interaction, content, view)
 
-    async def finalize(self, interaction: discord.Interaction, winner_team: int):
+    async def finalize(self, interaction: discord.Interaction, winner_team: int, turn: str | None = None):
         for ti, team in enumerate(self.team_members):
             for pi, member in enumerate(team):
                 leader = self.civs[ti][pi] if pi < len(self.civs[ti]) else ""
@@ -2035,8 +2038,33 @@ class TeamReportWizard:
             label = f"🏆 Takım {ti+1} (Kazanan)" if ti == winner_team else f"💀 Takım {ti+1} (Kaybeden)"
             embed.add_field(name=label, value="\n".join(field_lines) or "—", inline=False)
 
-        embed.set_footer(text=f"Maç ID: {self.match_id}")
+        footer = f"Maç ID: {self.match_id}"
+        if turn:
+            footer += f"  ·  Tur: {turn}"
+        embed.set_footer(text=footer)
         await _wizard_edit(interaction, "\u200b", None, embed)
+
+
+# ---- Turn Modal ----
+
+class _TurnModal(discord.ui.Modal, title="Tur Sayısı"):
+    turn_input = discord.ui.TextInput(
+        label="Maç kaçıncı turda bitti?",
+        placeholder="örn: 250",
+        max_length=10,
+        required=False,
+    )
+
+    def __init__(self, on_done):
+        super().__init__()
+        self._on_done = on_done
+
+    async def on_submit(self, interaction: discord.Interaction):
+        turn = self.turn_input.value.strip() or None
+        try:
+            await self._on_done(interaction, turn)
+        except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
+            pass
 
 
 # ---- Selector Views & Command ----
