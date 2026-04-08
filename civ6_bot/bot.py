@@ -1824,7 +1824,7 @@ async def coinflip_command(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------------------------
-# /createreportid — Modal tabanlı maç raporu wizard'ı
+# /createreportid — Chat mesajıyla tagleme, dropdown ile medeniyet
 # ---------------------------------------------------------------------------
 
 async def _wizard_edit(
@@ -1833,7 +1833,6 @@ async def _wizard_edit(
     view: discord.ui.View | None,
     embed: discord.Embed | None = None,
 ):
-    """Mesajı güvenli şekilde düzenle."""
     kwargs: dict = {"content": content, "view": view}
     if embed is not None:
         kwargs["embed"] = embed
@@ -1847,7 +1846,6 @@ async def _wizard_edit(
 
 
 def _parse_mentions(text: str, guild: discord.Guild) -> list[discord.Member]:
-    """Metindeki tüm Discord mention'larını Member listesine çevirir."""
     return [
         m for pid in re.findall(r"<@!?(\d+)>", text)
         if (m := guild.get_member(int(pid)))
@@ -1857,10 +1855,8 @@ def _parse_mentions(text: str, guild: discord.Guild) -> list[discord.Member]:
 # ---- FFA Wizard ----
 
 class FfaReportWizard:
-    """Üyeleri önceden bilinen FFA raporu wizard'ı."""
-
     def __init__(self, members: list[discord.Member]):
-        self.members = members          # 1.yer → son sıra
+        self.members = members
         self.player_count = len(members)
         self.match_id = _make_match_id("FFA")
         self.civs: list[str] = []
@@ -1872,26 +1868,31 @@ class FfaReportWizard:
             lines.append(f"**{i+1}.** {m.display_name}{civ_txt}")
         return "\n".join(lines)
 
-    async def show_pick_civ(self, interaction: discord.Interaction, idx: int):
+    def _civ_content(self, idx: int) -> str:
         member = self.members[idx]
-        used = set(self.civs)
-        available = [(c, l) for c, l in ALL_LEADERS if l not in used]
-        wizard = self
-
-        async def on_pick(inter: discord.Interaction, _civ: str, leader: str):
-            wizard.civs.append(leader)
-            if len(wizard.civs) >= wizard.player_count:
-                await wizard.finalize(inter)
-            else:
-                await wizard.show_pick_civ(inter, idx + 1)
-
-        view = LeaderSelectView(available, on_pick)
-        content = (
+        return (
             f"**⚔️ FFA Raporu — Medeniyet {idx+1}/{self.player_count}**\n"
             f"**{member.display_name}** ({idx+1}. yer) medeniyetini seç:\n\n"
             + self._progress_header()
         )
-        await _wizard_edit(interaction, content, view)
+
+    def _make_civ_view(self, idx: int) -> "LeaderSelectView":
+        wizard = self
+        used = set(self.civs)
+        available = [(c, l) for c, l in ALL_LEADERS if l not in used]
+
+        async def on_pick(inter: discord.Interaction, _civ: str, leader: str):
+            wizard.civs.append(leader)
+            nxt = len(wizard.civs)
+            if nxt >= wizard.player_count:
+                await wizard.finalize(inter)
+            else:
+                await _wizard_edit(inter, wizard._civ_content(nxt), wizard._make_civ_view(nxt))
+
+        return LeaderSelectView(available, on_pick)
+
+    async def send_first(self, followup: discord.Webhook):
+        await followup.send(content=self._civ_content(0), view=self._make_civ_view(0))
 
     async def finalize(self, interaction: discord.Interaction):
         ordered = [(str(m.id), str(m)) for m in self.members]
@@ -1923,71 +1924,69 @@ class FfaReportWizard:
 # ---- Team Wizard ----
 
 class TeamReportWizard:
-    """Üyeleri önceden bilinen takımlı raporu wizard'ı. Takım takım medeniyet sorar."""
-
     def __init__(self, team_members: list[list[discord.Member]]):
-        self.team_members = team_members   # [[T1P1,T1P2,...], [T2P1,...], ...]
+        self.team_members = team_members
         self.team_count = len(team_members)
         self.match_id = _make_match_id("TEAM")
-        self.civs: list[list[str]] = [[] for _ in team_members]   # civs[ti][pi]
+        self.civs: list[list[str]] = [[] for _ in team_members]
 
     def _total_players(self) -> int:
         return sum(len(t) for t in self.team_members)
 
     def _all_civs_flat(self) -> list[str]:
-        return [c for team_civs in self.civs for c in team_civs]
+        return [c for tc in self.civs for c in tc]
 
     def _progress_header(self) -> str:
         lines = []
         for ti, team in enumerate(self.team_members):
             for pi, member in enumerate(team):
-                if pi < len(self.civs[ti]):
-                    civ_txt = f" — {self.civs[ti][pi]}"
-                else:
-                    civ_txt = " — ..."
+                civ_txt = f" — {self.civs[ti][pi]}" if pi < len(self.civs[ti]) else " — ..."
                 lines.append(f"{TEAM_EMOJIS[ti]} **{member.display_name}**{civ_txt}")
         return "\n".join(lines)
 
-    async def show_pick_civ(self, interaction: discord.Interaction, team_idx: int, player_idx: int):
+    def _civ_content(self, team_idx: int, player_idx: int) -> str:
         member = self.team_members[team_idx][player_idx]
+        done = sum(len(self.civs[ti]) for ti in range(team_idx)) + player_idx
+        return (
+            f"**🤝 Takımlı Raporu — {done+1}/{self._total_players()}**\n"
+            f"{TEAM_EMOJIS[team_idx]} **{member.display_name}** "
+            f"(Takım {team_idx+1}) medeniyetini seç:\n\n"
+            + self._progress_header()
+        )
+
+    def _make_civ_view(self, team_idx: int, player_idx: int) -> "LeaderSelectView":
+        wizard = self
         used = set(self._all_civs_flat())
         available = [(c, l) for c, l in ALL_LEADERS if l not in used]
-        wizard = self
         team_size = len(self.team_members[team_idx])
-        done_count = sum(len(t) for t in self.civs)
 
         async def on_pick(inter: discord.Interaction, _civ: str, leader: str):
             wizard.civs[team_idx].append(leader)
             next_p = player_idx + 1
             if next_p < team_size:
-                # Aynı takımda sonraki oyuncu
-                await wizard.show_pick_civ(inter, team_idx, next_p)
+                await _wizard_edit(inter, wizard._civ_content(team_idx, next_p),
+                                   wizard._make_civ_view(team_idx, next_p))
             elif team_idx + 1 < wizard.team_count:
-                # Sonraki takım
-                await wizard.show_pick_civ(inter, team_idx + 1, 0)
+                await _wizard_edit(inter, wizard._civ_content(team_idx + 1, 0),
+                                   wizard._make_civ_view(team_idx + 1, 0))
             else:
                 await wizard.show_winner(inter)
 
-        view = LeaderSelectView(available, on_pick)
-        content = (
-            f"**🤝 Takımlı Raporu — {done_count+1}/{self._total_players()}**\n"
-            f"{TEAM_EMOJIS[team_idx]} **{member.display_name}** "
-            f"(Takım {team_idx+1}) medeniyetini seç:\n\n"
-            + self._progress_header()
-        )
-        await _wizard_edit(interaction, content, view)
+        return LeaderSelectView(available, on_pick)
+
+    async def send_first(self, followup: discord.Webhook):
+        await followup.send(content=self._civ_content(0, 0), view=self._make_civ_view(0, 0))
 
     async def show_winner(self, interaction: discord.Interaction):
         wizard = self
         view = discord.ui.View(timeout=300)
         for ti in range(self.team_count):
-            names = ", ".join(m.display_name for m in self.team_members[ti])
             btn = discord.ui.Button(
                 label=f"{TEAM_EMOJIS[ti]} Takım {ti+1} Kazandı",
                 style=discord.ButtonStyle.secondary,
             )
             async def winner_cb(inter: discord.Interaction, t=ti):
-                await wizard.finalize(inter, winner_team=t)
+                await wizard.finalize(inter, t)
             btn.callback = winner_cb
             view.add_item(btn)
 
@@ -2040,56 +2039,11 @@ class TeamReportWizard:
         await _wizard_edit(interaction, "\u200b", None, embed)
 
 
-# ---- Modals ----
+# ---- Selector Views & Command ----
 
-class FfaTagModal(discord.ui.Modal, title="FFA — Oyuncuları Etiketle"):
-    players_input = discord.ui.TextInput(
-        label="Oyuncular (1. yer önce, boşluk veya satır ile ayır)",
-        placeholder="@Oyuncu1 @Oyuncu2 @Oyuncu3 ...",
-        style=discord.TextStyle.paragraph,
-        max_length=600,
-    )
+def _msg_check(interaction: discord.Interaction):
+    return lambda m: m.author == interaction.user and m.channel == interaction.channel
 
-    async def on_submit(self, interaction: discord.Interaction):
-        members = _parse_mentions(self.players_input.value, interaction.guild)
-        if len(members) < 2:
-            await _wizard_edit(interaction, "❌ En az 2 oyuncu etiketle!", _CreateReportTypeView())
-            return
-        wizard = FfaReportWizard(members)
-        await wizard.show_pick_civ(interaction, 0)
-
-
-class TeamTagModal(discord.ui.Modal):
-    def __init__(self, team_count: int):
-        super().__init__(title=f"Takımlı — {team_count} Takım Oyuncuları")
-        self.team_count = team_count
-        for i in range(team_count):
-            field = discord.ui.TextInput(
-                label=f"Takım {i+1} — Oyuncuları etiketle",
-                placeholder="@Oyuncu1 @Oyuncu2 ...",
-                style=discord.TextStyle.paragraph,
-                max_length=500,
-            )
-            self.add_item(field)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        teams: list[list[discord.Member]] = []
-        for item in self.children:
-            members = _parse_mentions(item.value, interaction.guild)
-            if not members:
-                await _wizard_edit(
-                    interaction,
-                    f"❌ **{item.label}** için en az bir oyuncu etiketle!",
-                    _TeamCountView(),
-                )
-                return
-            teams.append(members)
-
-        wizard = TeamReportWizard(teams)
-        await wizard.show_pick_civ(interaction, 0, 0)
-
-
-# ---- Selector Views ----
 
 class _TeamCountView(discord.ui.View):
     """Takım sayısı seçimi (2–5)."""
@@ -2103,19 +2057,53 @@ class _TeamCountView(discord.ui.View):
 
     def _make_cb(self, count: int):
         async def cb(interaction: discord.Interaction):
-            await interaction.response.send_modal(TeamTagModal(count))
+            teams: list[list[discord.Member]] = []
+            for ti in range(count):
+                prompt = f"**{TEAM_EMOJIS[ti]} Takım {ti+1}** oyuncularını etiketle:"
+                if ti == 0:
+                    await interaction.response.edit_message(content=prompt, view=None)
+                else:
+                    await interaction.followup.send(prompt)
+                try:
+                    msg = await bot.wait_for("message", check=_msg_check(interaction), timeout=120)
+                except asyncio.TimeoutError:
+                    await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
+                    return
+                members = _parse_mentions(msg.content, interaction.guild)
+                if not members:
+                    await interaction.followup.send(
+                        f"❌ Takım {ti+1} için en az bir oyuncu etiketle! Tekrar `/createreportid` kullan.",
+                        ephemeral=True,
+                    )
+                    return
+                teams.append(members)
+            wizard = TeamReportWizard(teams)
+            await wizard.send_first(interaction.followup)
         return cb
 
 
 class _CreateReportTypeView(discord.ui.View):
-    """Maç türü seçimi: FFA veya Takımlı."""
-
     def __init__(self):
         super().__init__(timeout=120)
 
     @discord.ui.button(label="⚔️ FFA", style=discord.ButtonStyle.primary)
     async def ffa_btn(self, interaction: discord.Interaction, _):
-        await interaction.response.send_modal(FfaTagModal())
+        await interaction.response.edit_message(
+            content="Oyuncuları etiketle (1. yer önce, tek mesajda):", view=None
+        )
+        try:
+            msg = await bot.wait_for("message", check=_msg_check(interaction), timeout=120)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
+            return
+        members = _parse_mentions(msg.content, interaction.guild)
+        if len(members) < 2:
+            await interaction.followup.send(
+                "❌ En az 2 oyuncu etiketle! Tekrar `/createreportid` kullan.", ephemeral=True
+            )
+            return
+        wizard = FfaReportWizard(members)
+        await wizard.send_first(interaction.followup)
 
     @discord.ui.button(label="🤝 Takımlı", style=discord.ButtonStyle.success)
     async def team_btn(self, interaction: discord.Interaction, _):
