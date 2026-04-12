@@ -1394,7 +1394,33 @@ class AutoBanView(discord.ui.View):
 
     @discord.ui.button(label="✏️ Emoji ile Ban", style=discord.ButtonStyle.secondary)
     async def emoji_ban_btn(self, interaction: discord.Interaction, _btn):
-        await interaction.response.send_modal(_BulkBanModal(self.session, self))
+        await interaction.response.send_message(
+            "Banlamak istediğin liderleri yaz (her satıra bir tane ya da virgülle):",
+            ephemeral=True,
+        )
+        try:
+            msg = await bot.wait_for("message", check=_msg_check(interaction), timeout=120)
+        except asyncio.TimeoutError:
+            await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
+            return
+        pairs, not_found = _parse_ban_text(msg.content, interaction.guild)
+        newly = [p for p in pairs if p not in self.session.banned]
+        for p in newly:
+            self.session.banned.add(p)
+        parts = []
+        if newly:
+            parts.append(
+                f"✅ **{len(newly)}** lider banlandı: "
+                + ", ".join(l for _, l in newly[:10])
+                + ("..." if len(newly) > 10 else "")
+            )
+        if not_found:
+            parts.append(f"❌ Tanımlanamadı: {', '.join(not_found[:5])}")
+        if not newly and not not_found:
+            parts.append("⚠️ Hiçbir yeni lider bulunamadı.")
+        await interaction.followup.send("\n".join(parts) or "—", ephemeral=True)
+        if self.message:
+            await self.message.edit(embed=self.build_embed())
 
     @discord.ui.button(label="✅ Draftı Başlat", style=discord.ButtonStyle.success)
     async def start_btn(self, interaction: discord.Interaction, _btn):
