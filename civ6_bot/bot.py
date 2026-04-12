@@ -611,7 +611,7 @@ class TeamBanPhaseView(discord.ui.View):
         self.clear_items()
         civs = _CIV_PAGES[self.page]
         sel = discord.ui.Select(
-            placeholder=f"Medeniyet seç — Sayfa {self.page + 1}/{len(_CIV_PAGES)}",
+            placeholder=f"Lider seç — Sayfa {self.page + 1}/{len(_CIV_PAGES)}",
             options=[discord.SelectOption(label=c, value=c) for c in civs],
         )
         sel.callback = self._civ_chosen
@@ -1626,7 +1626,7 @@ def _parse_line(guild: discord.Guild, line: str) -> tuple[str | None, str, str |
 
 class FfaResultModal(discord.ui.Modal, title="FFA Maç Sonucu"):
     results = discord.ui.TextInput(
-        label="Sıralama — her satıra bir oyuncu + medeniyet",
+        label="Sıralama — her satıra bir oyuncu + lider",
         placeholder="@Oyuncu1 America\n@Oyuncu2 Greece\n@Oyuncu3 Japan",
         style=discord.TextStyle.paragraph,
         max_length=1500,
@@ -1733,7 +1733,7 @@ class TeamerResultModal(discord.ui.Modal, title="Teamer Maç Sonucu"):
 
 class FfaReportModal(discord.ui.Modal, title="FFA Maç Sonucu"):
     results = discord.ui.TextInput(
-        label="Sıralama (1.→son) — @oyuncu + medeniyet emojisi",
+        label="Sıralama (1.→son) — @oyuncu + lider emojisi",
         placeholder="@Oyuncu1 <:america:123>\n@Oyuncu2 <:greece:456>\n@Oyuncu3 <:japan:789>",
         style=discord.TextStyle.paragraph,
         max_length=1500,
@@ -1778,13 +1778,13 @@ class FfaReportModal(discord.ui.Modal, title="FFA Maç Sonucu"):
 
 class TeamerReportModal(discord.ui.Modal, title="Teamer Maç Sonucu"):
     winners = discord.ui.TextInput(
-        label="Kazanan Takım — @oyuncu + medeniyet emojisi",
+        label="Kazanan Takım — @oyuncu + lider emojisi",
         placeholder="@Oyuncu1 <:america:123>\n@Oyuncu2 <:greece:456>",
         style=discord.TextStyle.paragraph,
         max_length=700,
     )
     losers = discord.ui.TextInput(
-        label="Kaybeden Takım — @oyuncu + medeniyet emojisi",
+        label="Kaybeden Takım — @oyuncu + lider emojisi",
         placeholder="@Oyuncu3 <:japan:789>\n@Oyuncu4 <:china:012>",
         style=discord.TextStyle.paragraph,
         max_length=700,
@@ -2061,7 +2061,7 @@ class MostPlayedTypeView(discord.ui.View):
         title = "⚔️ FFA" if game_type == "ffa" else "🤝 Teamer"
         color = discord.Color.gold() if game_type == "ffa" else discord.Color.green()
         embed = discord.Embed(
-            title=f"{title} — En Çok Oynanan Medeniyetler",
+            title=f"{title} — En Çok Oynanan Liderler",
             description="\n".join(lines),
             color=color,
         )
@@ -2080,7 +2080,7 @@ async def coinflip_command(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------------------------
-# /createreportid — Chat mesajıyla tagleme, dropdown ile medeniyet
+# /createreportid — Chat mesajıyla tagleme, dropdown ile lider
 # ---------------------------------------------------------------------------
 
 async def _wizard_edit(
@@ -2446,7 +2446,7 @@ class _CreateReportTypeView(discord.ui.View):
         await interaction.response.edit_message(content="Kaç takım?", view=_TeamCountView())
 
 
-@bot.tree.command(name="createreportid", description="Adım adım oyuncu ve medeniyet seçerek maç sonucunu kaydet")
+@bot.tree.command(name="createreportid", description="Adım adım oyuncu ve lider seçerek maç sonucunu kaydet")
 async def createreportid_command(interaction: discord.Interaction):
     await interaction.response.send_message("Maç türünü seç:", view=_CreateReportTypeView())
 
@@ -2517,7 +2517,7 @@ async def help_command(interaction: discord.Interaction):
     )
     embed.add_field(
         name="📋 /createreportid",
-        value="Adım adım oyuncuları ve medeniyetleri seçerek maç sonucunu kaydet. FFA için sırayla oyuncu + medeniyet, takımlı için önce tüm oyuncular sonra medeniyetler seçilir.",
+        value="Adım adım oyuncuları ve liderleri seçerek maç sonucunu kaydet. FFA için sırayla oyuncu + lider, takımlı için önce tüm oyuncular sonra liderler seçilir.",
         inline=False,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
