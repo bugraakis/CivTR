@@ -38,6 +38,16 @@ _CIV_PAGES: list[list[str]] = [CIVS[i : i + 25] for i in range(0, len(CIVS), 25)
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+VICTORY_TYPES: list[tuple[str, str]] = [
+    ("🚀", "Bilim"),
+    ("🎭", "Kültür"),
+    ("⚔️", "Askeri"),
+    ("🕌", "Din"),
+    ("🕊️", "Diplomatik"),
+    ("🏆", "Puan"),
+    ("🏳️", "Teslim (CC)"),
+]
+
 MAPS = [
     ("Lakes",                      "🏞️"),
     ("Pangea Ultima",              "🌍"),
@@ -2098,6 +2108,7 @@ class FfaReportWizard:
         self.player_count = len(members)
         self.match_id = _make_match_id("FFA")
         self.civs: list[str] = []
+        self.victory: str | None = None
 
     def _progress_header(self) -> str:
         lines = []
@@ -2123,7 +2134,7 @@ class FfaReportWizard:
             wizard.civs.append(leader)
             nxt = len(wizard.civs)
             if nxt >= wizard.player_count:
-                await inter.response.send_modal(_TurnModal(wizard.finalize))
+                await _wizard_edit(inter, "**⚔️ Zafer türünü seç:**", _VictoryView(wizard))
             else:
                 await _wizard_edit(inter, wizard._civ_content(nxt), wizard._make_civ_view(nxt))
 
@@ -2156,6 +2167,8 @@ class FfaReportWizard:
             color=discord.Color.gold(),
         )
         footer = f"Maç ID: {self.match_id}"
+        if self.victory:
+            footer += f"  ·  Zafer: {self.victory}"
         if turn:
             footer += f"  ·  Tur: {turn}"
         embed.set_footer(text=footer)
@@ -2170,6 +2183,7 @@ class TeamReportWizard:
         self.team_count = len(team_members)
         self.match_id = _make_match_id("TEAM")
         self.civs: list[list[str]] = [[] for _ in team_members]
+        self.victory: str | None = None
 
     def _total_players(self) -> int:
         return sum(len(t) for t in self.team_members)
@@ -2227,7 +2241,7 @@ class TeamReportWizard:
                 style=discord.ButtonStyle.secondary,
             )
             async def winner_cb(inter: discord.Interaction, t=ti):
-                await inter.response.send_modal(_TurnModal(lambda i, turn, wt=t: wizard.finalize(i, wt, turn)))
+                await _wizard_edit(inter, "**🤝 Zafer türünü seç:**", _VictoryView(wizard, winner_team=t))
             btn.callback = winner_cb
             view.add_item(btn)
 
@@ -2277,6 +2291,8 @@ class TeamReportWizard:
             embed.add_field(name=label, value="\n".join(field_lines) or "—", inline=False)
 
         footer = f"Maç ID: {self.match_id}"
+        if self.victory:
+            footer += f"  ·  Zafer: {self.victory}"
         if turn:
             footer += f"  ·  Tur: {turn}"
         embed.set_footer(text=footer)
@@ -2303,6 +2319,36 @@ class _TurnModal(discord.ui.Modal, title="Tur Sayısı"):
             await self._on_done(interaction, turn)
         except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
             pass
+
+
+# ---- Victory Type View ----
+
+class _VictoryView(discord.ui.View):
+    """Zafer türü seçimi; seçimden sonra tur modalını açar."""
+
+    def __init__(self, wizard, winner_team: int | None = None):
+        super().__init__(timeout=300)
+        self._wizard = wizard
+        self._winner_team = winner_team
+        for emoji, label in VICTORY_TYPES:
+            btn = discord.ui.Button(
+                label=f"{emoji} {label}",
+                style=discord.ButtonStyle.secondary,
+            )
+            btn.callback = self._make_cb(label)
+            self.add_item(btn)
+
+    def _make_cb(self, victory: str):
+        async def cb(interaction: discord.Interaction):
+            self._wizard.victory = victory
+            if self._winner_team is not None:
+                wt = self._winner_team
+                await interaction.response.send_modal(
+                    _TurnModal(lambda i, turn, _wt=wt: self._wizard.finalize(i, _wt, turn))
+                )
+            else:
+                await interaction.response.send_modal(_TurnModal(self._wizard.finalize))
+        return cb
 
 
 # ---- Selector Views & Command ----
