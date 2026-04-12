@@ -2362,7 +2362,7 @@ class _CreateReportTypeView(discord.ui.View):
         except asyncio.TimeoutError:
             await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
             return
-        members = [m for m in msg.mentions if isinstance(m, discord.Member)]
+        members = _ordered_mentions(msg) or [m for m in msg.mentions if isinstance(m, discord.Member)]
         if len(members) < 2:
             await interaction.followup.send(
                 "❌ En az 2 oyuncu etiketle! Tekrar `/createreportid` kullan.", ephemeral=True
