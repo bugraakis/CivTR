@@ -1173,9 +1173,7 @@ class AutoDraftFfaSession:
 def _parse_ban_text(text: str, guild: discord.Guild | None = None) -> tuple[list[tuple[str,str]], list[str]]:
     """Metindeki emoji / lider adı / civ adı tokenlarından (civ, leader) listesi çıkarır.
     Döndürür: (bulunanlar, bulunamayanlar)"""
-    # Reverse map: emoji_short_name → leader
     _rev_leader: dict[str, str] = {v: k for k, v in LEADER_EMOJI_NAMES.items() if v}
-    # Reverse map: civ → all leaders
     _civ_leaders: dict[str, list[tuple[str,str]]] = {}
     for c, l in ALL_LEADERS:
         _civ_leaders.setdefault(c.lower(), []).append((c, l))
@@ -1184,52 +1182,40 @@ def _parse_ban_text(text: str, guild: discord.Guild | None = None) -> tuple[list
     not_found: list[str] = []
     seen: set[tuple[str,str]] = set()
 
-    # Virgül veya yeni satıra göre böl; her token bir emoji veya isim
-    tokens = [t.strip() for t in re.split(r"[,\n]+", text) if t.strip()]
-    for token in tokens:
-        matched = False
-
-        # 1) Discord custom emoji <:name:id> veya <a:name:id>
-        em = re.search(r"<a?:(\w+):\d+>", token)
-        if em:
-            ename = em.group(1)
-            # Lider emojisi mi?
-            if ename in _rev_leader:
-                leader = _rev_leader[ename]
-                for pair in ALL_LEADERS:
-                    if pair[1] == leader and pair not in seen:
-                        found.append(pair)
-                        seen.add(pair)
-                matched = True
-            else:
-                # Civ emojisi mi? (CIV_EMOJIS'teki emoji adıyla eşleştir)
-                for civ_name, emoji_val in CIV_EMOJIS.items():
-                    if emoji_val and ename in str(emoji_val):
-                        for pair in _civ_leaders.get(civ_name.lower(), []):
-                            if pair not in seen:
-                                found.append(pair)
-                                seen.add(pair)
-                        matched = True
-                        break
-
-        # 2) Düz lider adı (büyük/küçük harf bağımsız)
-        if not matched:
-            tl = token.lower()
-            for c, l in ALL_LEADERS:
-                if l.lower() == tl and (c, l) not in seen:
-                    found.append((c, l))
-                    seen.add((c, l))
-                    matched = True
+    # 1) Tüm Discord emoji'lerini teker teker bul (aynı satırda boşlukla ayrılmış olsa bile)
+    for ename in re.findall(r"<a?:(\w+):\d+>", text):
+        if ename in _rev_leader:
+            leader = _rev_leader[ename]
+            for pair in ALL_LEADERS:
+                if pair[1] == leader and pair not in seen:
+                    found.append(pair)
+                    seen.add(pair)
+        else:
+            for civ_name, emoji_val in CIV_EMOJIS.items():
+                if emoji_val and ename in str(emoji_val):
+                    for pair in _civ_leaders.get(civ_name.lower(), []):
+                        if pair not in seen:
+                            found.append(pair)
+                            seen.add(pair)
                     break
 
-        # 3) Civ adı → tüm liderler
+    # 2) Emoji'leri metinden çıkar, kalan düz isimleri virgül/satır ile böl
+    plain = re.sub(r"<a?:\w+:\d+>", "", text)
+    for token in [t.strip() for t in re.split(r"[,\n]+", plain) if t.strip()]:
+        tl = token.lower()
+        matched = False
+        for c, l in ALL_LEADERS:
+            if l.lower() == tl and (c, l) not in seen:
+                found.append((c, l))
+                seen.add((c, l))
+                matched = True
+                break
         if not matched:
-            for pair_list in _civ_leaders.get(token.lower(), []):
-                if pair_list not in seen:
-                    found.append(pair_list)
-                    seen.add(pair_list)
+            for pair in _civ_leaders.get(tl, []):
+                if pair not in seen:
+                    found.append(pair)
+                    seen.add(pair)
                     matched = True
-
         if not matched:
             not_found.append(token[:30])
 
