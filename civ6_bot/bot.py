@@ -1895,6 +1895,20 @@ def _parse_mentions(text: str, guild: discord.Guild) -> list[discord.Member]:
     ]
 
 
+def _ordered_mentions(msg: discord.Message) -> list[discord.Member]:
+    """msg.content'teki sıraya göre Member listesi döndürür.
+    msg.mentions resolved verisi kullanılır (cache bağımsız),
+    sıra ise content'teki <@id> regex sırasından alınır."""
+    member_map = {str(m.id): m for m in msg.mentions if isinstance(m, discord.Member)}
+    seen: set[str] = set()
+    result: list[discord.Member] = []
+    for pid in re.findall(r"<@!?(\d+)>", msg.content):
+        if pid not in seen and pid in member_map:
+            result.append(member_map[pid])
+            seen.add(pid)
+    return result
+
+
 # ---- FFA Wizard ----
 
 class FfaReportWizard:
@@ -2140,7 +2154,7 @@ class _TeamCountView(discord.ui.View):
                 except asyncio.TimeoutError:
                     await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
                     return
-                members = [m for m in msg.mentions if isinstance(m, discord.Member)]
+                members = _ordered_mentions(msg)
                 if not members:
                     await interaction.followup.send(
                         f"❌ Takım {ti+1} için en az bir oyuncu etiketle! Tekrar `/createreportid` kullan.",
