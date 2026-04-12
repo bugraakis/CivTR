@@ -2194,7 +2194,10 @@ class FfaReportWizard:
         if turn:
             footer += f"  ·  Tur: {turn}"
         embed.set_footer(text=footer)
-        await _wizard_edit(interaction, "\u200b", None, embed)
+        try:
+            await interaction.response.send_message(embed=embed)
+        except discord.InteractionResponded:
+            await interaction.followup.send(embed=embed)
 
 
 # ---- Team Wizard ----
