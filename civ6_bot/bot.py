@@ -1,5 +1,7 @@
 import asyncio
 import sys
+import traceback
+import logging
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import discord
@@ -11,6 +13,8 @@ import re
 from collections import Counter
 import os
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 from leaders import CIVS, LEADERS_BY_CIV, image_url
 from civ_emojis import CIV_EMOJIS
@@ -121,6 +125,8 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 _orig_view_on_error = discord.ui.View.on_error
 
 async def _global_view_on_error(self, interaction: discord.Interaction, error: Exception, item):
+    logging.error("View error in item=%s: %s", item, error)
+    traceback.print_exception(type(error), error, error.__traceback__)
     try:
         if not interaction.response.is_done():
             await interaction.response.send_message("❌ Bir hata oluştu, tekrar dene.", ephemeral=True)
@@ -1393,7 +1399,11 @@ class AutoBanView(discord.ui.View):
     @discord.ui.button(label="✅ Draftı Başlat", style=discord.ButtonStyle.success)
     async def start_btn(self, interaction: discord.Interaction, _btn):
         self.stop()
-        await self.session.finalize(interaction)
+        try:
+            await self.session.finalize(interaction)
+        except Exception as exc:
+            logging.error("AutoBanView.start_btn finalize error: %s", exc, exc_info=True)
+            await _safe_send(interaction, "❌ Draft başlatılamadı, tekrar dene.")
 
 
 class AutoDraftFfaCountView(discord.ui.View):
