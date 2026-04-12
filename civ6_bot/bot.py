@@ -1153,6 +1153,173 @@ class AutoDraftFfaSession:
             await interaction.followup.send(embeds=chunk)
 
 
+def _parse_ban_text(text: str, guild: discord.Guild | None = None) -> tuple[list[tuple[str,str]], list[str]]:
+    """Metindeki emoji / lider adı / civ adı tokenlarından (civ, leader) listesi çıkarır.
+    Döndürür: (bulunanlar, bulunamayanlar)"""
+    # Reverse map: emoji_short_name → leader
+    _rev_leader: dict[str, str] = {v: k for k, v in LEADER_EMOJI_NAMES.items() if v}
+    # Reverse map: civ → all leaders
+    _civ_leaders: dict[str, list[tuple[str,str]]] = {}
+    for c, l in ALL_LEADERS:
+        _civ_leaders.setdefault(c.lower(), []).append((c, l))
+
+    found: list[tuple[str,str]] = []
+    not_found: list[str] = []
+    seen: set[tuple[str,str]] = set()
+
+    # Virgül veya yeni satıra göre böl; her token bir emoji veya isim
+    tokens = [t.strip() for t in re.split(r"[,\n]+", text) if t.strip()]
+    for token in tokens:
+        matched = False
+
+        # 1) Discord custom emoji <:name:id> veya <a:name:id>
+        em = re.search(r"<a?:(\w+):\d+>", token)
+        if em:
+            ename = em.group(1)
+            # Lider emojisi mi?
+            if ename in _rev_leader:
+                leader = _rev_leader[ename]
+                for pair in ALL_LEADERS:
+                    if pair[1] == leader and pair not in seen:
+                        found.append(pair)
+                        seen.add(pair)
+                matched = True
+            else:
+                # Civ emojisi mi? (CIV_EMOJIS'teki emoji adıyla eşleştir)
+                for civ_name, emoji_val in CIV_EMOJIS.items():
+                    if emoji_val and ename in str(emoji_val):
+                        for pair in _civ_leaders.get(civ_name.lower(), []):
+                            if pair not in seen:
+                                found.append(pair)
+                                seen.add(pair)
+                        matched = True
+                        break
+
+        # 2) Düz lider adı (büyük/küçük harf bağımsız)
+        if not matched:
+            tl = token.lower()
+            for c, l in ALL_LEADERS:
+                if l.lower() == tl and (c, l) not in seen:
+                    found.append((c, l))
+                    seen.add((c, l))
+                    matched = True
+                    break
+
+        # 3) Civ adı → tüm liderler
+        if not matched:
+            for pair_list in _civ_leaders.get(token.lower(), []):
+                if pair_list not in seen:
+                    found.append(pair_list)
+                    seen.add(pair_list)
+                    matched = True
+
+        if not matched:
+            not_found.append(token[:30])
+
+    return found, not_found
+
+
+class _MultiBanSelectView(discord.ui.View):
+    """Sayfaları çoklu seçimli ban dropdown'ı."""
+
+    def __init__(self, available: list[tuple[str,str]], session, ban_view_ref, page: int = 0):
+        super().__init__(timeout=300)
+        self.available = available
+        self.session = session
+        self.ban_view_ref = ban_view_ref
+        self.page = page
+        self._rebuild()
+
+    def _rebuild(self):
+        self.clear_items()
+        pages = [self.available[i:i+25] for i in range(0, len(self.available), 25)]
+        if not pages:
+            return
+        page_leaders = pages[self.page]
+        sel = discord.ui.Select(
+            placeholder=f"Banlanacakları seç — Sayfa {self.page+1}/{len(pages)}",
+            min_values=1,
+            max_values=len(page_leaders),
+            options=[
+                discord.SelectOption(label=l, value=f"{c}||{l}", description=c)
+                for c, l in page_leaders
+            ],
+        )
+        sel.callback = self._on_select
+        self.add_item(sel)
+        if self.page > 0:
+            b = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary)
+            b.callback = self._prev
+            self.add_item(b)
+        if self.page < len(pages) - 1:
+            b = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary)
+            b.callback = self._next
+            self.add_item(b)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        newly = []
+        for val in interaction.data["values"]:
+            civ, leader = val.split("||", 1)
+            pair = (civ, leader)
+            if pair not in self.session.banned:
+                self.session.banned.add(pair)
+                newly.append(leader)
+        # Seçilenleri available'dan çıkar, view'i yenile
+        self.available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in self.session.banned]
+        total_pages = max(1, (len(self.available) + 24) // 25)
+        self.page = min(self.page, total_pages - 1)
+        self._rebuild()
+        msg = f"✅ **{len(newly)}** lider banlandı: {', '.join(newly[:8])}{'...' if len(newly)>8 else ''}\nBaşka seçmek istersen devam edebilirsin."
+        await interaction.response.edit_message(content=msg, view=self)
+        if self.ban_view_ref.message:
+            await self.ban_view_ref.message.edit(embed=self.ban_view_ref.build_embed())
+
+    async def _prev(self, interaction: discord.Interaction):
+        self.page -= 1
+        self._rebuild()
+        await interaction.response.edit_message(view=self)
+
+    async def _next(self, interaction: discord.Interaction):
+        self.page += 1
+        self._rebuild()
+        await interaction.response.edit_message(view=self)
+
+
+class _BulkBanModal(discord.ui.Modal, title="Toplu Ban"):
+    ban_input = discord.ui.TextInput(
+        label="Lider emojilerini veya adlarını yaz (virgülle)",
+        placeholder="<:AbrahamLincoln:id>, <:Saladin:id>, Hammurabi ...",
+        style=discord.TextStyle.paragraph,
+        max_length=1000,
+        required=True,
+    )
+
+    def __init__(self, session, ban_view_ref):
+        super().__init__()
+        self._session = session
+        self._view_ref = ban_view_ref
+
+    async def on_submit(self, interaction: discord.Interaction):
+        pairs, not_found = _parse_ban_text(self.ban_input.value, interaction.guild)
+        newly = [p for p in pairs if p not in self._session.banned]
+        for p in newly:
+            self._session.banned.add(p)
+
+        parts = []
+        if newly:
+            parts.append(f"✅ **{len(newly)}** lider banlandı: " +
+                         ", ".join(l for _, l in newly[:10]) +
+                         ("..." if len(newly) > 10 else ""))
+        if not_found:
+            parts.append(f"❌ Tanımlanamadı: {', '.join(not_found[:5])}")
+        if not newly and not not_found:
+            parts.append("⚠️ Hiçbir yeni lider bulunamadı.")
+
+        await interaction.response.send_message("\n".join(parts) or "—", ephemeral=True)
+        if self._view_ref.message:
+            await self._view_ref.message.edit(embed=self._view_ref.build_embed())
+
+
 class AutoBanView(discord.ui.View):
     """Ban phase for autodraft sessions: paginated leader list, no civ-first flow."""
 
@@ -1198,6 +1365,19 @@ class AutoBanView(discord.ui.View):
             view=LeaderSelectView(available, on_pick),
             ephemeral=True,
         )
+
+    @discord.ui.button(label="📋 Listeden Toplu Ban", style=discord.ButtonStyle.secondary)
+    async def multi_ban_btn(self, interaction: discord.Interaction, _btn):
+        available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in self.session.banned]
+        await interaction.response.send_message(
+            "Banlamak istediğin liderleri seç:",
+            view=_MultiBanSelectView(available, self.session, self),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="✏️ Emoji ile Ban", style=discord.ButtonStyle.secondary)
+    async def emoji_ban_btn(self, interaction: discord.Interaction, _btn):
+        await interaction.response.send_modal(_BulkBanModal(self.session, self))
 
     @discord.ui.button(label="✅ Draftı Başlat", style=discord.ButtonStyle.success)
     async def start_btn(self, interaction: discord.Interaction, _btn):
