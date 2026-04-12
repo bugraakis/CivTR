@@ -1900,9 +1900,9 @@ async def id_command(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="report", description="Maç ID'sini girerek sonucu kaydet ve puanları güncelle")
+@bot.tree.command(name="reportwithid", description="Maç ID'si ile sonucu kaydet")
 @app_commands.describe(match_id="Maç ID'si (örnek: FFA-A3K7X2B9C1D4E5)")
-async def report_command(interaction: discord.Interaction, match_id: str):
+async def reportwithid_command(interaction: discord.Interaction, match_id: str):
     mid = match_id.upper().strip()
     if mid.startswith("FFA-"):
         await interaction.response.send_modal(FfaReportModal(mid))
@@ -1915,13 +1915,13 @@ async def report_command(interaction: discord.Interaction, match_id: str):
         )
 
 
-@bot.tree.command(name="autodraftffa", description="Ses kanalı olmadan lider banla ve havuzları oyunculara otomatik dağıt")
-async def autodraftffa_command(interaction: discord.Interaction):
+@bot.tree.command(name="quickffa", description="Ban yap, liderleri oyunculara otomatik dağıt")
+async def quickffa_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç oyuncu?", view=AutoDraftFfaCountView())
 
 
-@bot.tree.command(name="autodraftteam", description="Ses kanalı olmadan lider banla ve liderleri takımlara otomatik dağıt")
-async def autodraftteam_command(interaction: discord.Interaction):
+@bot.tree.command(name="quickteam", description="Ban yap, liderleri takımlara otomatik dağıt")
+async def quickteam_command(interaction: discord.Interaction):
     await interaction.response.send_message("Kaç takım?", view=AutoDraftCountView())
 
 
@@ -2446,8 +2446,8 @@ class _CreateReportTypeView(discord.ui.View):
         await interaction.response.edit_message(content="Kaç takım?", view=_TeamCountView())
 
 
-@bot.tree.command(name="createreportid", description="Adım adım oyuncu ve lider seçerek maç sonucunu kaydet")
-async def createreportid_command(interaction: discord.Interaction):
+@bot.tree.command(name="reportwithoutgameid", description="Oyuncuları etiketle ve sonucu kaydet")
+async def reportwithoutgameid_command(interaction: discord.Interaction):
     await interaction.response.send_message("Maç türünü seç:", view=_CreateReportTypeView())
 
 
@@ -2472,54 +2472,20 @@ async def stop_cmd(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📖 Simfest Bot — Komutlar",
-        description="Civilization VI draft ve turnuva yönetimi için tüm komutlar aşağıda listelenmiştir.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(
-        name="⚔️ /ffa",
-        value="Ses kanalındaki tüm oyuncularla FFA draft başlatır. Önce harita oylaması yapılır, ardından herkes listeden bir lider banlar, son olarak kalan liderler oyunculara rastgele havuz olarak dağıtılır.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🤝 /team @rakip",
-        value="Ses kanalındaki oyuncularla 2 takımlı sıralı draft başlatır. Takım temsilcileri sırayla harita banlar, lider banlar ve lider seçer. Seçimler listeden yapılır.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🎲 /autodraftffa",
-        value="Ses kanalı gerekmez. Oyuncu sayısını seçip istediğin liderleri banladıktan sonra kalan liderler oyunculara otomatik olarak eşit dağıtılır.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🎲 /autodraftteam",
-        value="Ses kanalı gerekmez. Takım sayısını seçip istediğin liderleri banladıktan sonra kalan liderler takımlara otomatik olarak eşit dağıtılır.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🏆 /leaderboard",
-        value="Sunucudaki oyuncuların puan sıralamasını gösterir. ⚔️ FFA veya 🤝 Teamer modunu buton ile seçebilir, ◀ ▶ ile sayfalar arasında gezinebilirsin.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🎖️ /mostplayed",
-        value="Sunucuda en çok oynanan liderleri listeler. FFA veya Teamer modunu buton ile seçebilirsin.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🛑 /stop",
-        value="Bu kanalda aktif olan draft oturumunu iptal eder.",
-        inline=False,
-    )
-    embed.add_field(
-        name="🪙 /coinflip",
-        value="Madeni parayı havaya at, yazı mı tura mı karar ver!",
-        inline=False,
-    )
-    embed.add_field(
-        name="📋 /createreportid",
-        value="Adım adım oyuncuları ve liderleri seçerek maç sonucunu kaydet. FFA için sırayla oyuncu + lider, takımlı için önce tüm oyuncular sonra liderler seçilir.",
-        inline=False,
-    )
+    # Alfabetik sıra
+    embed.add_field(name="🪙 /coinflip",            value="Yazı mı tura mı.", inline=False)
+    embed.add_field(name="⚔️ /ffa",                 value="Ses kanalıyla FFA draft. Harita oylaması → lider ban → havuz dağıtımı.", inline=False)
+    embed.add_field(name="👤 /id",                   value="Kendi puan ve lider istatistiklerini göster.", inline=False)
+    embed.add_field(name="🏆 /leaderboard",          value="FFA veya Teamer puan sıralaması.", inline=False)
+    embed.add_field(name="🎖️ /mostplayed",           value="En çok oynanan liderler.", inline=False)
+    embed.add_field(name="🎲 /quickffa",             value="Ses kanalı gerekmez. Ban yap → liderler oyunculara otomatik dağıtılır.", inline=False)
+    embed.add_field(name="🎲 /quickteam",            value="Ses kanalı gerekmez. Ban yap → liderler takımlara otomatik dağıtılır.", inline=False)
+    embed.add_field(name="📋 /reportwithid",         value="Maç ID'si ile sonucu kaydet.", inline=False)
+    embed.add_field(name="📋 /reportwithoutgameid",  value="Oyuncuları etiketle, lider seç, sonucu kaydet.", inline=False)
+    embed.add_field(name="🛑 /stop",                 value="Aktif draft oturumunu iptal et.", inline=False)
+    embed.add_field(name="🤝 /team @rakip",          value="Ses kanalıyla 2 takımlı sıralı draft. Harita ban → lider ban → lider seçimi.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
