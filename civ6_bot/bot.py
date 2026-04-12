@@ -503,7 +503,7 @@ class BanPhaseView(discord.ui.View):
 
         try:
             await interaction.response.send_message(
-                "Banlamak istediğin lideri seç:", view=LeaderSelectView(available, on_pick), ephemeral=True
+                "Lideri seç:", view=LeaderSelectView(available, on_pick), ephemeral=True
             )
         except (discord.NotFound, discord.InteractionResponded, discord.HTTPException):
             pass
@@ -1364,7 +1364,7 @@ class AutoBanView(discord.ui.View):
                 await view_ref.message.edit(embed=view_ref.build_embed())
 
         await interaction.response.send_message(
-            "Banlamak istediğin lideri seç:",
+            "Lideri seç:",
             view=LeaderSelectView(available, on_pick),
             ephemeral=True,
         )
@@ -1373,7 +1373,7 @@ class AutoBanView(discord.ui.View):
     async def multi_ban_btn(self, interaction: discord.Interaction, _btn):
         available = [(c, l) for c, l in ALL_LEADERS if (c, l) not in self.session.banned]
         await interaction.response.send_message(
-            "Banlamak istediğin liderleri seç:",
+            "Liderleri seç:",
             view=_MultiBanSelectView(available, self.session, self),
             ephemeral=True,
         )
@@ -1381,7 +1381,7 @@ class AutoBanView(discord.ui.View):
     @discord.ui.button(label="✏️ Emoji ile Ban", style=discord.ButtonStyle.secondary)
     async def emoji_ban_btn(self, interaction: discord.Interaction, _btn):
         await interaction.response.send_message(
-            "Banlamak istediğin liderleri yaz (her satıra bir tane ya da virgülle):",
+            "Banlanacak liderleri yaz (her satıra bir tane):",
             ephemeral=True,
         )
         try:
@@ -1922,7 +1922,7 @@ async def autodraftffa_command(interaction: discord.Interaction):
 
 @bot.tree.command(name="autodraftteam", description="Ses kanalı olmadan lider banla ve liderleri takımlara otomatik dağıt")
 async def autodraftteam_command(interaction: discord.Interaction):
-    await interaction.response.send_message("Kaç takım olsun?", view=AutoDraftCountView())
+    await interaction.response.send_message("Kaç takım?", view=AutoDraftCountView())
 
 
 _LB_PER_PAGE = 10
@@ -2142,8 +2142,8 @@ class FfaReportWizard:
     def _civ_content(self, idx: int) -> str:
         member = self.members[idx]
         return (
-            f"**⚔️ FFA Raporu — Medeniyet {idx+1}/{self.player_count}**\n"
-            f"**{member.display_name}** ({idx+1}. yer) medeniyetini seç:\n\n"
+            f"**⚔️ FFA — {idx+1}/{self.player_count}**\n"
+            f"{member.display_name} ({idx+1}. yer):\n\n"
             + self._progress_header()
         )
 
@@ -2156,7 +2156,7 @@ class FfaReportWizard:
             wizard.civs.append(leader)
             nxt = len(wizard.civs)
             if nxt >= wizard.player_count:
-                await _wizard_edit(inter, "**⚔️ Zafer türünü seç:**", _VictoryView(wizard))
+                await _wizard_edit(inter, "Zafer türü:", _VictoryView(wizard))
             else:
                 await _wizard_edit(inter, wizard._civ_content(nxt), wizard._make_civ_view(nxt))
 
@@ -2228,9 +2228,8 @@ class TeamReportWizard:
         member = self.team_members[team_idx][player_idx]
         done = sum(len(self.civs[ti]) for ti in range(team_idx)) + player_idx
         return (
-            f"**🤝 Takımlı Raporu — {done+1}/{self._total_players()}**\n"
-            f"{TEAM_EMOJIS[team_idx]} **{member.display_name}** "
-            f"(Takım {team_idx+1}) medeniyetini seç:\n\n"
+            f"**🤝 Takımlı — {done+1}/{self._total_players()}**\n"
+            f"{TEAM_EMOJIS[team_idx]} {member.display_name} (Takım {team_idx+1}):\n\n"
             + self._progress_header()
         )
 
@@ -2266,7 +2265,7 @@ class TeamReportWizard:
                 style=discord.ButtonStyle.secondary,
             )
             async def winner_cb(inter: discord.Interaction, t=ti):
-                await _wizard_edit(inter, "**🤝 Zafer türünü seç:**", _VictoryView(wizard, winner_team=t))
+                await _wizard_edit(inter, "Zafer türü:", _VictoryView(wizard, winner_team=t))
             btn.callback = winner_cb
             view.add_item(btn)
 
@@ -2276,7 +2275,7 @@ class TeamReportWizard:
                 leader = self.civs[ti][pi] if pi < len(self.civs[ti]) else "?"
                 lines.append(f"{TEAM_EMOJIS[ti]} **{member.display_name}** — {leader}")
 
-        content = "**🤝 Takımlı Raporu — Hangi takım kazandı?**\n\n" + "\n".join(lines)
+        content = "**Kazanan takım?**\n\n" + "\n".join(lines)
         await _wizard_edit(interaction, content, view)
 
     async def finalize(self, interaction: discord.Interaction, winner_team: int, turn: str | None = None):
@@ -2396,7 +2395,7 @@ class _TeamCountView(discord.ui.View):
         async def cb(interaction: discord.Interaction):
             teams: list[list[discord.Member]] = []
             for ti in range(count):
-                prompt = f"**{TEAM_EMOJIS[ti]} Takım {ti+1}** oyuncularını etiketle:"
+                prompt = f"{TEAM_EMOJIS[ti]} Takım {ti+1} oyuncularını etiketle:"
                 if ti == 0:
                     await interaction.response.edit_message(content=prompt, view=None)
                 else:
@@ -2409,7 +2408,7 @@ class _TeamCountView(discord.ui.View):
                 members = _ordered_mentions(msg)
                 if not members:
                     await interaction.followup.send(
-                        f"❌ Takım {ti+1} için en az bir oyuncu etiketle! Tekrar `/createreportid` kullan.",
+                        f"❌ Takım {ti+1}: en az bir oyuncu etiketle.",
                         ephemeral=True,
                     )
                     return
@@ -2426,7 +2425,7 @@ class _CreateReportTypeView(discord.ui.View):
     @discord.ui.button(label="⚔️ FFA", style=discord.ButtonStyle.primary)
     async def ffa_btn(self, interaction: discord.Interaction, _):
         await interaction.response.edit_message(
-            content="Oyuncuları etiketle (1. yer önce, tek mesajda):", view=None
+            content="1. yer önce, herkesi etiketle:", view=None
         )
         try:
             msg = await bot.wait_for("message", check=_msg_check(interaction), timeout=120)
@@ -2436,7 +2435,7 @@ class _CreateReportTypeView(discord.ui.View):
         members = _ordered_mentions(msg) or [m for m in msg.mentions if isinstance(m, discord.Member)]
         if len(members) < 2:
             await interaction.followup.send(
-                "❌ En az 2 oyuncu etiketle! Tekrar `/createreportid` kullan.", ephemeral=True
+                "❌ En az 2 oyuncu etiketle.", ephemeral=True
             )
             return
         wizard = FfaReportWizard(members)
