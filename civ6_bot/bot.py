@@ -2468,24 +2468,25 @@ async def stop_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
-@bot.tree.command(name="help", description="Tüm komutları ve açıklamalarını listele")
+@bot.tree.command(name="help", description="Tüm komutları listele")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="📖 Simfest Bot — Komutlar",
+        title="📖 Komutlar",
+        description=(
+            "🪙 `/coinflip`\n"
+            "⚔️ `/ffa`\n"
+            "👤 `/id`\n"
+            "🏆 `/leaderboard`\n"
+            "🎖️ `/mostplayed`\n"
+            "🎲 `/quickffa`\n"
+            "🎲 `/quickteam`\n"
+            "📋 `/reportwithid`\n"
+            "📋 `/reportwithoutgameid`\n"
+            "🛑 `/stop`\n"
+            "🤝 `/team`"
+        ),
         color=discord.Color.blurple(),
     )
-    # Alfabetik sıra
-    embed.add_field(name="🪙 /coinflip",            value="Yazı mı tura mı.", inline=False)
-    embed.add_field(name="⚔️ /ffa",                 value="Ses kanalıyla FFA draft. Harita oylaması → lider ban → havuz dağıtımı.", inline=False)
-    embed.add_field(name="👤 /id",                   value="Kendi puan ve lider istatistiklerini göster.", inline=False)
-    embed.add_field(name="🏆 /leaderboard",          value="FFA veya Teamer puan sıralaması.", inline=False)
-    embed.add_field(name="🎖️ /mostplayed",           value="En çok oynanan liderler.", inline=False)
-    embed.add_field(name="🎲 /quickffa",             value="Ses kanalı gerekmez. Ban yap → liderler oyunculara otomatik dağıtılır.", inline=False)
-    embed.add_field(name="🎲 /quickteam",            value="Ses kanalı gerekmez. Ban yap → liderler takımlara otomatik dağıtılır.", inline=False)
-    embed.add_field(name="📋 /reportwithid",         value="Maç ID'si ile sonucu kaydet.", inline=False)
-    embed.add_field(name="📋 /reportwithoutgameid",  value="Oyuncuları etiketle, lider seç, sonucu kaydet.", inline=False)
-    embed.add_field(name="🛑 /stop",                 value="Aktif draft oturumunu iptal et.", inline=False)
-    embed.add_field(name="🤝 /team @rakip",          value="Ses kanalıyla 2 takımlı sıralı draft. Harita ban → lider ban → lider seçimi.", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
