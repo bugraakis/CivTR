@@ -1304,8 +1304,8 @@ class _MultiBanSelectView(discord.ui.View):
 
 class _BulkBanModal(discord.ui.Modal, title="Toplu Ban"):
     ban_input = discord.ui.TextInput(
-        label="Lider emojilerini veya adlarını yaz (virgülle)",
-        placeholder="<:AbrahamLincoln:id>, <:Saladin:id>, Hammurabi ...",
+        label="Lider adı veya emojisi (virgülle ayır)",
+        placeholder="Hammurabi, Saladin, Alexander ...",
         style=discord.TextStyle.paragraph,
         max_length=1000,
         required=True,
