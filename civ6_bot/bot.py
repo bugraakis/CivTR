@@ -2471,19 +2471,19 @@ async def stop_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="Tüm komutları listele")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="📖 Komutlar",
+        title="Komutlar",
         description=(
-            "🪙 `/coinflip`\n"
-            "⚔️ `/ffa`\n"
-            "👤 `/id`\n"
-            "🏆 `/leaderboard`\n"
-            "🎖️ `/mostplayed`\n"
-            "🎲 `/quickffa`\n"
-            "🎲 `/quickteam`\n"
-            "📋 `/reportwithid`\n"
-            "📋 `/reportwithoutgameid`\n"
-            "🛑 `/stop`\n"
-            "🤝 `/team`"
+            "`/coinflip` — Yazı mı tura mı.\n"
+            "`/ffa` — Ses kanalıyla FFA draft başlatır.\n"
+            "`/id` — Kendi puan ve lider istatistiklerini gösterir.\n"
+            "`/leaderboard` — Puan sıralamasını gösterir.\n"
+            "`/mostplayed` — En çok oynanan liderleri listeler.\n"
+            "`/quickffa` — Ses kanalı olmadan lider ban yap ve oyunculara dağıt.\n"
+            "`/quickteam` — Ses kanalı olmadan lider ban yap ve takımlara dağıt.\n"
+            "`/reportwithid` — Maç ID'si ile sonucu kaydet.\n"
+            "`/reportwithoutgameid` — Oyuncuları etiketle, lider seç, sonucu kaydet.\n"
+            "`/stop` — Aktif draft oturumunu iptal eder.\n"
+            "`/team` — Ses kanalıyla 2 takımlı sıralı draft başlatır."
         ),
         color=discord.Color.blurple(),
     )
