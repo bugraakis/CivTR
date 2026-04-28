@@ -3,4 +3,5 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-CMD ["python", "civ6_bot/bot.py"]
+WORKDIR /app/civ6_bot
+CMD ["python", "bot.py"]
