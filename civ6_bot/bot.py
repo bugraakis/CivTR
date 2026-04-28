@@ -2,9 +2,13 @@ import asyncio
 import sys
 import traceback
 import logging
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-import discord
+import subprocess
+
+try:
+    import discord
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "discord.py", "python-dotenv"])
+    import discord
 from discord import app_commands
 from discord.ext import commands
 import random
