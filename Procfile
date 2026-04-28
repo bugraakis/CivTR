@@ -1,1 +1,1 @@
-worker: cd civ6_bot && python bot.py
+worker: pip install -r requirements.txt && cd civ6_bot && python bot.py

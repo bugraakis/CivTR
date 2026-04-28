@@ -12,7 +12,7 @@ import sqlite3
 import os
 from typing import NamedTuple
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "scores.db")
+DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "scores.db"))
 
 # ── Constants ────────────────────────────────────────────────────────────────
 FFA_START  = 1000
