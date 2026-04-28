@@ -2468,6 +2468,21 @@ async def stop_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
+@bot.tree.command(name="backupdb", description="Veritabanı yedeğini indir (sadece sunucu sahibi)")
+async def backupdb_command(interaction: discord.Interaction):
+    if interaction.user.id != interaction.guild.owner_id:
+        await interaction.response.send_message("❌ Bu komut sadece sunucu sahibine açık.", ephemeral=True)
+        return
+    if not os.path.exists(db.DB_PATH):
+        await interaction.response.send_message("❌ Veritabanı bulunamadı.", ephemeral=True)
+        return
+    await interaction.response.send_message(
+        "📦 Veritabanı yedeği:",
+        file=discord.File(db.DB_PATH, filename="scores_backup.db"),
+        ephemeral=True,
+    )
+
+
 @bot.tree.command(name="help", description="Tüm komutları listele")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
