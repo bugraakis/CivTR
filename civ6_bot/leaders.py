@@ -1,4 +1,6 @@
-BASE_URL = "https://civ6bbg.github.io/images/leaders/"
+from urllib.parse import quote
+
+_BASE = "https://raw.githubusercontent.com/civ6bbg/civ6bbg.github.io/main/images/leaders/"
 
 # (Civilization, Leader) tuples — 90 leaders from civ6bbg.github.io
 _RAW = [
@@ -102,5 +104,4 @@ CIVS: list[str] = list(LEADERS_BY_CIV.keys())  # 54 civs
 
 
 def image_url(civ: str, leader: str) -> str:
-    filename = f"{civ} {leader}.webp"
-    return BASE_URL + filename
+    return _BASE + quote(f"{civ} {leader}.webp")
