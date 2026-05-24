@@ -8,6 +8,7 @@ CIV_EMOJIS: dict[str, str | None] = {
     "America":       None,  # örnek: "<:civ_america:123456789>"
     "Arabia":        None,
     "Australia":     None,
+    "Austria":       None,
     "Aztec":         None,
     "Babylon":       None,
     "Brazil":        None,
@@ -22,6 +23,7 @@ CIV_EMOJIS: dict[str, str | None] = {
     "Gaul":          None,
     "Georgia":       None,
     "Germany":       None,
+    "Goths":         None,
     "Gran Colombia": None,
     "Greece":        None,
     "Hungary":       None,
@@ -54,6 +56,7 @@ CIV_EMOJIS: dict[str, str | None] = {
     "Sumeria":       None,
     "Swahili":       None,
     "Sweden":        None,
+    "Taíno":         None,
     "Teotihuacán":   None,
     "Thule":         None,
     "Tibet":         None,

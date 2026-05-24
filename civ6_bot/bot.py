@@ -2449,6 +2449,30 @@ class _CreateReportTypeView(discord.ui.View):
     async def team_btn(self, interaction: discord.Interaction, _):
         await interaction.response.edit_message(content="Kaç takım?", view=_TeamCountView())
 
+    @discord.ui.button(label="⚔️ 2v2", style=discord.ButtonStyle.danger)
+    async def twovtwo_btn(self, interaction: discord.Interaction, _):
+        teams: list[list[discord.Member]] = []
+        for ti in range(2):
+            prompt = f"{TEAM_EMOJIS[ti]} Takım {ti+1} oyuncularını etiketle:"
+            if ti == 0:
+                await interaction.response.edit_message(content=prompt, view=None)
+            else:
+                await interaction.followup.send(prompt)
+            try:
+                msg = await bot.wait_for("message", check=_msg_check(interaction), timeout=120)
+            except asyncio.TimeoutError:
+                await interaction.followup.send("⏰ Süre doldu.", ephemeral=True)
+                return
+            members = _ordered_mentions(msg)
+            if not members:
+                await interaction.followup.send(
+                    f"❌ Takım {ti+1}: en az bir oyuncu etiketle.", ephemeral=True
+                )
+                return
+            teams.append(members)
+        wizard = TeamReportWizard(teams)
+        await wizard.send_first(interaction.followup)
+
 
 @bot.tree.command(name="reportwithoutgameid", description="Oyuncuları etiketle ve sonucu kaydet")
 async def reportwithoutgameid_command(interaction: discord.Interaction):
@@ -2500,7 +2524,7 @@ async def help_command(interaction: discord.Interaction):
             "`/quickffa` — Ses kanalı olmadan lider ban yap ve oyunculara dağıt.\n"
             "`/quickteam` — Ses kanalı olmadan lider ban yap ve takımlara dağıt.\n"
             "`/reportwithid` — Maç ID'si ile sonucu kaydet.\n"
-            "`/reportwithoutgameid` — Oyuncuları etiketle, lider seç, sonucu kaydet.\n"
+            "`/reportwithoutgameid` — FFA, 2v2 veya takımlı maç sonucunu kaydet.\n"
             "`/stop` — Aktif draft oturumunu iptal eder.\n"
             "`/team` — Ses kanalıyla 2 takımlı sıralı draft başlatır."
         ),
