@@ -1,6 +1,6 @@
 BASE_URL = "https://civ6bbg.github.io/images/leaders/"
 
-# (Civilization, Leader) tuples — 85 leaders from civ6bbg.github.io
+# (Civilization, Leader) tuples — 90 leaders from civ6bbg.github.io
 _RAW = [
     ("America",       "Abraham Lincoln"),
     ("America",       "Teddy Roosevelt (Bull Moose)"),
@@ -8,6 +8,7 @@ _RAW = [
     ("Arabia",        "Saladin (Vizier)"),
     ("Arabia",        "Saladin (Sultan)"),
     ("Australia",     "John Curtin"),
+    ("Austria",       "Maria Theresa"),
     ("Aztec",         "Montezuma"),
     ("Babylon",       "Hammurabi"),
     ("Brazil",        "Pedro II"),
@@ -36,6 +37,7 @@ _RAW = [
     ("Georgia",       "Tamar"),
     ("Germany",       "Frederick Barbarossa"),
     ("Germany",       "Ludwig II"),
+    ("Goths",         "Theodoric"),
     ("Gran Colombia", "Simón Bolívar"),
     ("Greece",        "Gorgo"),
     ("Greece",        "Pericles"),
@@ -72,6 +74,7 @@ _RAW = [
     ("Phoenicia",     "Dido"),
     ("Phoenicia",     "Ahiram"),
     ("Poland",        "Jadwiga"),
+    ("Poland",        "Stanislaw II"),
     ("Portugal",      "João III"),
     ("Rome",          "Julius Caesar"),
     ("Rome",          "Trajan"),
@@ -82,6 +85,7 @@ _RAW = [
     ("Sumeria",       "Gilgamesh"),
     ("Swahili",       "Al-Hasan ibn Sulaiman"),
     ("Sweden",        "Kristina"),
+    ("Taíno",         "Anacaona"),
     ("Teotihuacán",   "Spearthrower Owl"),
     ("Thule",         "Kiviuq"),
     ("Tibet",         "Trisong Detsen"),
