@@ -2552,7 +2552,6 @@ async def on_ready():
     print(f"✅ {bot.user} olarak giriş yapıldı. ({synced_count}/{len(bot.guilds)} sunucu)")
     await bot.change_presence(activity=discord.Game(name="Simfest"))
 
-
 # ===========================================================================
 # Entry point
 # ===========================================================================
@@ -2560,4 +2559,14 @@ async def on_ready():
 if __name__ == "__main__":
     if not TOKEN:
         raise RuntimeError("DISCORD_TOKEN ortam değişkeni ayarlanmamış!")
-    bot.run(TOKEN)
+    try:
+        bot.run(TOKEN, log_handler=None)
+    except discord.LoginFailure:
+        print("❌ HATA: Discord token geçersiz. DISCORD_TOKEN değişkenini kontrol et.")
+        raise
+    except discord.PrivilegedIntentsRequired:
+        print("❌ HATA: Ayrıcalıklı intents (members/message_content) Discord Developer Portal'da kapalı.")
+        raise
+    except Exception as e:
+        print(f"❌ HATA: Bot başlatılamadı: {e}")
+        raise
