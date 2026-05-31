@@ -11,6 +11,8 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     # Arabia
     "Saladin (Vizier)":                   "Saladin",
     "Saladin (Sultan)":                   "SultanSaladin",
+    # Austria
+    "Maria Theresa":                      "MariaTheresa",
     # Australia
     "John Curtin":                        "JohnCurtin",
     # Aztec
@@ -55,6 +57,8 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     # Germany
     "Frederick Barbarossa":               "FrederickBarbarossa",
     "Ludwig II":                          "LudwigII",
+    # Goths
+    "Theodoric":                          "Theodoric",
     # Gran Colombia
     "Simón Bolívar":                      "SimonBolivar",
     # Greece
@@ -114,6 +118,7 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     "Ahiram":                             "Ahiram",
     # Poland
     "Jadwiga":                            "Jadwiga",
+    "Stanislaw II":                       "StanislawII",
     # Portugal
     "João III":                           "JoaoIIIPortugal",
     # Rome
@@ -133,6 +138,8 @@ LEADER_EMOJI_NAMES: dict[str, str | None] = {
     "Al-Hasan ibn Sulaiman":              "AlHasanibnSulaiman",
     # Sweden
     "Kristina":                           "Kristina",
+    # Taíno
+    "Anacaona":                           "Anacaona",
     # Teotihuacán
     "Spearthrower Owl":                   "SpearthrowerOwl",
     # Thule
