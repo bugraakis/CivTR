@@ -2498,9 +2498,6 @@ async def stop_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="uploademojis", description="Eksik lider emojilerini sunucuya yükle (sunucu sahibi)")
 async def uploademojis_command(interaction: discord.Interaction):
-    if interaction.user.id != interaction.guild.owner_id:
-        await interaction.response.send_message("❌ Bu komut sadece sunucu sahibine açık.", ephemeral=True)
-        return
     await interaction.response.defer(ephemeral=True)
 
     import aiohttp
