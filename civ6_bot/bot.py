@@ -122,6 +122,7 @@ async def _safe_send(interaction: discord.Interaction, content: str, ephemeral: 
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    logging.error("App command error: %s", error, exc_info=error)
     await _safe_send(interaction, "❌ Bir hata oluştu, lütfen tekrar dene.")
 
 
@@ -2496,12 +2497,21 @@ async def stop_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
-@bot.tree.command(name="uploademojis", description="Eksik lider emojilerini sunucuya yükle (sunucu sahibi)")
+@bot.tree.command(name="uploademojis", description="Eksik lider emojilerini sunucuya yükle")
 async def uploademojis_command(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
-    import aiohttp
-    from PIL import Image
+    try:
+        import aiohttp
+    except ImportError:
+        await interaction.followup.send("❌ aiohttp kurulu değil.", ephemeral=True)
+        return
+    try:
+        from PIL import Image
+    except ImportError:
+        await interaction.followup.send("❌ Pillow kurulu değil. Railway yeniden deploy bekleniyor.", ephemeral=True)
+        return
+
     import io as _io
     from leaders import _RAW, image_url as _img_url
 
