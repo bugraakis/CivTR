@@ -2511,12 +2511,104 @@ async def backupdb_command(interaction: discord.Interaction):
     )
 
 
+# ===========================================================================
+# CPL Draft
+# ===========================================================================
+
+_CPL_PICKS = 3  # her oyuncuya verilen seçenek sayısı
+
+
+class CplDraftSession:
+    def __init__(self, players: list[discord.Member]):
+        self.players = players
+        self.current_idx = 0
+        self.chosen: dict[int, str] = {}   # player.id → seçilen lider
+
+        pool = [leader for _, leader in ALL_LEADERS]
+        random.shuffle(pool)
+        self.picks: dict[int, list[str]] = {
+            m.id: pool[i * _CPL_PICKS: (i + 1) * _CPL_PICKS]
+            for i, m in enumerate(players)
+        }
+
+    def current(self) -> discord.Member:
+        return self.players[self.current_idx]
+
+    def done(self) -> bool:
+        return self.current_idx >= len(self.players)
+
+    def progress_embed(self) -> discord.Embed:
+        embed = discord.Embed(title="🎮 CPL Draft", color=discord.Color.blurple())
+        lines = []
+        for i, m in enumerate(self.players):
+            if m.id in self.chosen:
+                lines.append(f"✅ **{m.display_name}** — seçti")
+            elif i == self.current_idx:
+                lines.append(f"⏳ **{m.display_name}** — sıra sende!")
+            else:
+                lines.append(f"🕐 {m.display_name} — bekliyor")
+        embed.description = "\n".join(lines)
+        if not self.done():
+            embed.set_footer(text=f"Sıra: {self.current().display_name}")
+        return embed
+
+    def result_embed(self) -> discord.Embed:
+        embed = discord.Embed(title="🎮 CPL Draft Sonucu", color=discord.Color.blurple())
+        for m in self.players:
+            embed.add_field(name=m.display_name, value=self.chosen.get(m.id, "—"), inline=True)
+        return embed
+
+
+class CplPickView(discord.ui.View):
+    def __init__(self, session: CplDraftSession):
+        super().__init__(timeout=180)
+        self._s = session
+        for leader in session.picks[session.current().id]:
+            btn = discord.ui.Button(label=leader, style=discord.ButtonStyle.secondary)
+            btn.callback = self._make_cb(session.current(), leader)
+            self.add_item(btn)
+
+    def _make_cb(self, member: discord.Member, leader: str):
+        async def cb(interaction: discord.Interaction):
+            if interaction.user.id != member.id:
+                await interaction.response.send_message(
+                    f"Sıra {member.display_name}'da!", ephemeral=True
+                )
+                return
+            s = self._s
+            s.chosen[member.id] = leader
+            s.current_idx += 1
+            if s.done():
+                await interaction.response.edit_message(embed=s.result_embed(), view=None, content=None)
+            else:
+                await interaction.response.edit_message(embed=s.progress_embed(), view=CplPickView(s), content=None)
+        return cb
+
+
+@bot.tree.command(name="draft", description="CPL formatında lider drafti başlat")
+async def draft_command(interaction: discord.Interaction):
+    players = get_voice_members(interaction)
+    if not players:
+        await interaction.response.send_message("❌ Ses kanalında olman gerekiyor.", ephemeral=True)
+        return
+    max_players = len(ALL_LEADERS) // _CPL_PICKS
+    if len(players) > max_players:
+        await interaction.response.send_message(
+            f"❌ Çok fazla oyuncu ({len(players)}). Maksimum {max_players}.", ephemeral=True
+        )
+        return
+    random.shuffle(players)
+    session = CplDraftSession(players)
+    await interaction.response.send_message(embed=session.progress_embed(), view=CplPickView(session))
+
+
 @bot.tree.command(name="help", description="Tüm komutları listele")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
         title="Komutlar",
         description=(
             "`/coinflip` — Yazı mı tura mı.\n"
+            "`/draft` — Ses kanalıyla CPL formatında lider drafti başlatır.\n"
             "`/ffa` — Ses kanalıyla FFA draft başlatır.\n"
             "`/id` — Kendi puan ve lider istatistiklerini gösterir.\n"
             "`/leaderboard` — Puan sıralamasını gösterir.\n"
