@@ -2496,6 +2496,62 @@ async def stop_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("Bu kanalda aktif bir oyun yok.", ephemeral=True)
 
 
+@bot.tree.command(name="uploademojis", description="Eksik lider emojilerini sunucuya yükle (sunucu sahibi)")
+async def uploademojis_command(interaction: discord.Interaction):
+    if interaction.user.id != interaction.guild.owner_id:
+        await interaction.response.send_message("❌ Bu komut sadece sunucu sahibine açık.", ephemeral=True)
+        return
+    await interaction.response.defer(ephemeral=True)
+
+    import aiohttp
+    from PIL import Image
+    import io as _io
+    from leaders import _RAW, image_url as _img_url
+
+    leader_to_civ = {leader: civ for civ, leader in _RAW}
+    existing = {e.name for e in interaction.guild.emojis}
+
+    uploaded, skipped, failed = [], [], []
+
+    async with aiohttp.ClientSession() as session:
+        for leader, emoji_name in LEADER_EMOJI_NAMES.items():
+            if not emoji_name:
+                continue
+            if emoji_name in existing:
+                skipped.append(emoji_name)
+                continue
+            civ = leader_to_civ.get(leader)
+            if not civ:
+                failed.append(f"{leader} (civ bulunamadı)")
+                continue
+            url = _img_url(civ, leader)
+            try:
+                async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status != 200:
+                        failed.append(f"{leader} (HTTP {resp.status})")
+                        continue
+                    webp = await resp.read()
+                img = Image.open(_io.BytesIO(webp))
+                buf = _io.BytesIO()
+                img.save(buf, format="PNG")
+                await interaction.guild.create_custom_emoji(name=emoji_name, image=buf.getvalue())
+                uploaded.append(emoji_name)
+                await asyncio.sleep(1.2)   # Discord rate limit
+            except discord.HTTPException as e:
+                failed.append(f"{leader}: {e.text}")
+            except Exception as e:
+                failed.append(f"{leader}: {str(e)[:60]}")
+
+    parts = []
+    if uploaded:
+        parts.append(f"✅ {len(uploaded)} emoji yüklendi")
+    if skipped:
+        parts.append(f"⏭️ {len(skipped)} zaten vardı, atlandı")
+    if failed:
+        parts.append(f"❌ {len(failed)} başarısız:\n" + "\n".join(failed[:15]))
+    await interaction.followup.send("\n".join(parts) or "İşlem tamamlandı.", ephemeral=True)
+
+
 @bot.tree.command(name="backupdb", description="Veritabanı yedeğini indir (sadece sunucu sahibi)")
 async def backupdb_command(interaction: discord.Interaction):
     if interaction.user.id != interaction.guild.owner_id:
