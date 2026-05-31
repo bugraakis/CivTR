@@ -7,8 +7,13 @@ import subprocess
 try:
     import discord
 except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "discord.py", "python-dotenv"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "discord.py", "python-dotenv", "Pillow"])
     import discord
+
+try:
+    from PIL import Image  # noqa: F401 — ensure Pillow is installed at startup
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
 from discord import app_commands
 from discord.ext import commands
 import random
