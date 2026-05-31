@@ -195,7 +195,7 @@ def build_pool_embed(
     guild: discord.Guild | None = None,
 ) -> discord.Embed:
     lines = []
-    for civ, leader in pool:
+    for civ, leader in sorted(pool, key=lambda x: x[1]):
         emoji = leader_emoji_str(leader, guild)
         label = f"{emoji} {leader}".strip() if emoji else leader
         lines.append(f"{label} — {civ}")
@@ -1487,7 +1487,7 @@ class AutoDraftSession:
         embeds = []
         for i, leaders in enumerate(teams):
             lines = []
-            for civ, leader in leaders:
+            for civ, leader in sorted(leaders, key=lambda x: x[1]):
                 emoji = leader_emoji_str(leader, guild)
                 label = f"{emoji} {leader}".strip() if emoji else leader
                 lines.append(f"{label} — {civ}")
